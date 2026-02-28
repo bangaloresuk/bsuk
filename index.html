@@ -3640,12 +3640,21 @@ ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
 </script>
 
 <script>
-// ── Register Service Worker ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════
+//  SUK BANGALORE — PWA Install & App-like Experience
+// ═══════════════════════════════════════════════════════
+
+const IS_IOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const IS_ANDROID    = /Android/.test(navigator.userAgent);
+const IS_STANDALONE = window.matchMedia('(display-mode: standalone)').matches
+                      || window.navigator.standalone === true;
+const DISMISSED_KEY = 'suk_install_dismissed';
+
+// ── Register Service Worker ─────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/bangalore-suk/sw.js', { scope: '/bangalore-suk/' })
       .then(reg => {
-        console.log('[SUK PWA] Service worker registered');
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
           nw.addEventListener('statechange', () => {
@@ -3654,76 +3663,213 @@ if ('serviceWorker' in navigator) {
             }
           });
         });
-      })
-      .catch(err => console.log('[SUK PWA] SW failed:', err));
+      }).catch(() => {});
   });
 }
 
-// ── "New version available" banner ──────────────────────────────
-function showUpdateBanner() {
-  const b = document.createElement('div');
-  b.innerHTML = `<div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
-    z-index:99999;background:#1d4ed8;color:#fff;padding:12px 20px;border-radius:30px;
-    box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;align-items:center;gap:12px;
-    font-family:sans-serif;font-size:13px;font-weight:600;white-space:nowrap;">
-    🪷 New version available
-    <button onclick="window.location.reload()" style="background:rgba(255,255,255,0.25);
-      border:none;color:#fff;padding:5px 14px;border-radius:20px;cursor:pointer;
-      font-size:12px;font-weight:700;">Update</button>
-  </div>`;
-  document.body.appendChild(b);
-  setTimeout(() => b.remove(), 10000);
-}
+// ── Show install UI after page settles ─────────────────
+window.addEventListener('load', () => {
+  if (IS_STANDALONE) return; // already installed — skip everything
+  if (sessionStorage.getItem(DISMISSED_KEY)) return; // dismissed this session
 
-// ── Android install prompt ───────────────────────────────────────
+  if (IS_IOS) {
+    // iOS: beforeinstallprompt never fires — show manual guide after 2s
+    setTimeout(showIOSGuide, 2000);
+  }
+  // Android: handled by beforeinstallprompt event below
+});
+
+// ── Android: capture install prompt ────────────────────
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  setTimeout(() => {
-    if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
-      showInstallBanner();
-    }
-  }, 3000);
+  if (!sessionStorage.getItem(DISMISSED_KEY)) {
+    setTimeout(showAndroidBanner, 2000);
+  }
 });
-
-function showInstallBanner() {
-  if (document.getElementById('suk-install-banner')) return;
-  const b = document.createElement('div');
-  b.id = 'suk-install-banner';
-  b.innerHTML = `<div style="position:fixed;bottom:80px;left:12px;right:12px;z-index:99999;
-    background:linear-gradient(135deg,#0e2266,#1d4ed8);color:#fff;padding:14px 18px;
-    border-radius:18px;box-shadow:0 6px 24px rgba(14,34,102,0.4);
-    display:flex;align-items:center;gap:12px;font-family:sans-serif;">
-    <span style="font-size:28px">🪷</span>
-    <div style="flex:1">
-      <div style="font-size:13px;font-weight:800;margin-bottom:2px;">Add to Home Screen</div>
-      <div style="font-size:11px;opacity:0.8;">Install SUK Bangalore for quick access</div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      <button id="suk-install-btn" style="background:rgba(255,255,255,0.2);
-        border:1px solid rgba(255,255,255,0.4);color:#fff;padding:7px 16px;
-        border-radius:20px;cursor:pointer;font-size:12px;font-weight:800;">Install</button>
-      <button onclick="document.getElementById('suk-install-banner').remove()"
-        style="background:none;border:none;color:rgba(255,255,255,0.5);
-          font-size:11px;cursor:pointer;text-align:center;">Not now</button>
-    </div>
-  </div>`;
-  document.body.appendChild(b);
-  document.getElementById('suk-install-btn').addEventListener('click', async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      b.remove();
-    }
-  });
-}
-
 window.addEventListener('appinstalled', () => {
   const b = document.getElementById('suk-install-banner');
   if (b) b.remove();
 });
+
+// ── ANDROID install banner ──────────────────────────────
+function showAndroidBanner() {
+  if (document.getElementById('suk-install-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'suk-install-banner';
+  b.innerHTML = `
+    <div style="position:fixed;bottom:76px;left:12px;right:12px;z-index:99999;
+      background:linear-gradient(135deg,#0e2266,#1d4ed8);color:#fff;
+      padding:16px 18px;border-radius:20px;
+      box-shadow:0 8px 30px rgba(14,34,102,0.45);
+      display:flex;align-items:center;gap:14px;font-family:sans-serif;
+      animation:slideUp 0.3s ease;">
+      <img src="icons/icon-96.png" style="width:48px;height:48px;border-radius:12px;
+        box-shadow:0 2px 8px rgba(0,0,0,0.3);" />
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:800;margin-bottom:3px;">
+          Install SUK Bangalore
+        </div>
+        <div style="font-size:11px;opacity:0.75;line-height:1.4">
+          Add to home screen — opens like a native app, no browser bar
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+        <button id="suk-install-btn"
+          style="background:#fff;border:none;color:#1d4ed8;padding:8px 18px;
+            border-radius:20px;cursor:pointer;font-size:12px;font-weight:900;
+            box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+          Install
+        </button>
+        <button id="suk-dismiss-btn"
+          style="background:none;border:none;color:rgba(255,255,255,0.55);
+            font-size:11px;cursor:pointer;text-align:center;padding:2px 0;">
+          Not now
+        </button>
+      </div>
+    </div>
+    <style>@keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}</style>`;
+  document.body.appendChild(b);
+
+  document.getElementById('suk-install-btn').addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    }
+    b.remove();
+  });
+  document.getElementById('suk-dismiss-btn').addEventListener('click', () => {
+    sessionStorage.setItem(DISMISSED_KEY, '1');
+    b.remove();
+  });
+}
+
+// ── iOS install guide ───────────────────────────────────
+function showIOSGuide() {
+  if (document.getElementById('suk-ios-guide')) return;
+  const b = document.createElement('div');
+  b.id = 'suk-ios-guide';
+  b.innerHTML = `
+    <div style="position:fixed;bottom:0;left:0;right:0;z-index:99999;
+      background:#fff;border-radius:24px 24px 0 0;
+      box-shadow:0 -8px 40px rgba(14,34,102,0.18);
+      font-family:sans-serif;overflow:hidden;
+      animation:slideUpFull 0.35s cubic-bezier(.34,1.56,.64,1);">
+
+      <!-- Handle bar -->
+      <div style="width:40px;height:4px;background:rgba(0,0,0,0.12);
+        border-radius:2px;margin:12px auto 0;"></div>
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 20px 14px">
+        <img src="icons/icon-96.png" style="width:52px;height:52px;border-radius:14px;
+          box-shadow:0 3px 12px rgba(29,78,216,0.25);" />
+        <div>
+          <div style="font-size:16px;font-weight:800;color:#1e3a8a;">SUK Bangalore</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px;">
+            badalbks1992.github.io
+          </div>
+        </div>
+        <button onclick="document.getElementById('suk-ios-guide').remove();sessionStorage.setItem('${DISMISSED_KEY}','1')"
+          style="margin-left:auto;background:rgba(107,114,128,0.1);border:none;
+            width:28px;height:28px;border-radius:50%;cursor:pointer;
+            font-size:14px;color:#6b7280;display:flex;align-items:center;justify-content:center;">✕</button>
+      </div>
+
+      <!-- Divider -->
+      <div style="height:1px;background:rgba(0,0,0,0.06);margin:0 20px;"></div>
+
+      <!-- Steps -->
+      <div style="padding:16px 20px 8px">
+        <div style="font-size:12px;font-weight:800;color:#1d4ed8;
+          letter-spacing:0.8px;text-transform:uppercase;margin-bottom:14px;">
+          Add to Home Screen — 2 taps
+        </div>
+
+        <!-- Step 1 -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+          <div style="width:36px;height:36px;border-radius:10px;flex-shrink:0;
+            background:rgba(29,78,216,0.1);display:flex;align-items:center;
+            justify-content:center;font-size:20px;">
+            ⬆️
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e3a8a;">
+              Tap the Share button
+            </div>
+            <div style="font-size:11px;color:#6b7280;margin-top:2px;">
+              The <b>⬆️ Share</b> icon at the bottom of Safari
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+          <div style="width:36px;height:36px;border-radius:10px;flex-shrink:0;
+            background:rgba(29,78,216,0.1);display:flex;align-items:center;
+            justify-content:center;font-size:20px;">
+            ➕
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e3a8a;">
+              Tap "Add to Home Screen"
+            </div>
+            <div style="font-size:11px;color:#6b7280;margin-top:2px;">
+              Scroll down in the share sheet and tap <b>Add to Home Screen</b>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result -->
+        <div style="background:linear-gradient(135deg,rgba(29,78,216,0.07),rgba(59,130,246,0.05));
+          border:1px solid rgba(29,78,216,0.12);border-radius:14px;
+          padding:12px 14px;margin-bottom:20px;
+          display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px">✅</span>
+          <div style="font-size:12px;color:#1e3a8a;font-weight:600;line-height:1.5">
+            App icon appears on your home screen.<br/>
+            Opens fullscreen — no browser bar!
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow pointing to share button -->
+      <div style="text-align:center;padding-bottom:36px;">
+        <div style="display:inline-flex;align-items:center;gap:6px;
+          background:rgba(29,78,216,0.08);padding:8px 18px;border-radius:20px;">
+          <span style="font-size:16px;">⬇️</span>
+          <span style="font-size:12px;font-weight:700;color:#1d4ed8;">
+            Share button is at the bottom of your screen
+          </span>
+        </div>
+      </div>
+    </div>
+    <div onclick="document.getElementById('suk-ios-guide').remove();sessionStorage.setItem('${DISMISSED_KEY}','1')"
+      style="position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:99998;"></div>
+    <style>@keyframes slideUpFull{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>`;
+  document.body.appendChild(b);
+}
+
+// ── "New version available" toast ──────────────────────
+function showUpdateBanner() {
+  const b = document.createElement('div');
+  b.innerHTML = `
+    <div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);
+      z-index:99999;background:#1d4ed8;color:#fff;padding:10px 18px;border-radius:30px;
+      box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;align-items:center;gap:10px;
+      font-family:sans-serif;font-size:13px;font-weight:600;white-space:nowrap;
+      animation:fadeIn 0.3s ease;">
+      🪷 New version available
+      <button onclick="window.location.reload()" style="background:rgba(255,255,255,0.25);
+        border:none;color:#fff;padding:5px 14px;border-radius:20px;cursor:pointer;
+        font-size:12px;font-weight:700;">Update now</button>
+    </div>
+    <style>@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>`;
+  document.body.appendChild(b);
+  setTimeout(() => b.remove(), 12000);
+}
 </script>
 </body>
 </html>
