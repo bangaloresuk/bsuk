@@ -3,9 +3,6 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Jayguru — Satsang Upayojana Kendra</title>
-
-<!-- PWA -->
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#1d4ed8" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -13,10 +10,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="SUK Bangalore" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png" />
-<link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144.png" />
 <link rel="shortcut icon" href="icons/icon-96.png" type="image/png" />
-<meta name="description" content="Book prayer slots and satsang events — Satsang Upayojana Kendra, Bangalore" />
+<title>Jayguru — Satsang Upayojana Kendra</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -3640,251 +3635,224 @@ ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
 </script>
 
 <script>
-// ═══════════════════════════════════════════════════════
-//  SUK BANGALORE — PWA Install & App-like Experience
-// ═══════════════════════════════════════════════════════
+(function() {
+  var IS_IOS  = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  var IS_SA   = window.matchMedia('(display-mode: standalone)').matches
+                || window.navigator.standalone === true;
+  var SKIP    = 'suk_skip';
+  var prompt_ = null;
 
-const IS_IOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-const IS_ANDROID    = /Android/.test(navigator.userAgent);
-const IS_STANDALONE = window.matchMedia('(display-mode: standalone)').matches
-                      || window.navigator.standalone === true;
-const DISMISSED_KEY = 'suk_install_dismissed';
-
-// ── Register Service Worker ─────────────────────────────
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    // Dynamically detect the base path so it works on any GitHub Pages URL
-    const swScope = location.pathname.replace(/\/[^\/]*$/, '/') || '/';
-    navigator.serviceWorker.register(swScope + 'sw.js', { scope: swScope })
-      .then(reg => {
-        reg.addEventListener('updatefound', () => {
-          const nw = reg.installing;
-          nw.addEventListener('statechange', () => {
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              showUpdateBanner();
-            }
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      var base = location.pathname.replace(/\/[^/]*$/, '/') || '/';
+      navigator.serviceWorker.register(base + 'sw.js', { scope: base })
+        .then(function(reg) {
+          reg.addEventListener('updatefound', function() {
+            var nw = reg.installing;
+            nw.addEventListener('statechange', function() {
+              if (nw.state === 'installed' && navigator.serviceWorker.controller)
+                showUpdateToast();
+            });
           });
-        });
-      }).catch(() => {});
-  });
-}
-
-// ── Show install UI after page settles ─────────────────
-window.addEventListener('load', () => {
-  if (IS_STANDALONE) return; // already installed — skip everything
-  if (sessionStorage.getItem(DISMISSED_KEY)) return; // dismissed this session
-
-  if (IS_IOS) {
-    // iOS: beforeinstallprompt never fires — show manual guide after 2s
-    setTimeout(showIOSGuide, 2000);
+        }).catch(function() {});
+    });
   }
-  // Android: handled by beforeinstallprompt event below
-});
 
-// ── Android: capture install prompt ────────────────────
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  if (!sessionStorage.getItem(DISMISSED_KEY)) {
-    setTimeout(showAndroidBanner, 2000);
+  // Android — capture the install prompt
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    prompt_ = e;
+    if (!IS_SA && !sessionStorage.getItem(SKIP))
+      setTimeout(showAndroidBanner, 2500);
+  });
+  window.addEventListener('appinstalled', function() { remove_('suk-pwa'); });
+
+  // iOS — show manual guide
+  window.addEventListener('load', function() {
+    if (!IS_IOS || IS_SA || sessionStorage.getItem(SKIP)) return;
+    setTimeout(showIOSSheet, 2500);
+  });
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  function remove_(id) { var el = document.getElementById(id); if (el) el.remove(); }
+
+  function css(el, s) { el.style.cssText = s; return el; }
+
+  function btn(text, styles, fn) {
+    var b = css(document.createElement('button'), styles);
+    b.textContent = text;
+    b.addEventListener('click', fn);
+    return b;
   }
-});
-window.addEventListener('appinstalled', () => {
-  const b = document.getElementById('suk-install-banner');
-  if (b) b.remove();
-});
 
-// ── ANDROID install banner ──────────────────────────────
-function showAndroidBanner() {
-  if (document.getElementById('suk-install-banner')) return;
-  const b = document.createElement('div');
-  b.id = 'suk-install-banner';
-  b.innerHTML = `
-    <div style="position:fixed;bottom:76px;left:12px;right:12px;z-index:99999;
-      background:linear-gradient(135deg,#0e2266,#1d4ed8);color:#fff;
-      padding:16px 18px;border-radius:20px;
-      box-shadow:0 8px 30px rgba(14,34,102,0.45);
-      display:flex;align-items:center;gap:14px;font-family:sans-serif;
-      animation:slideUp 0.3s ease;">
-      <img src="icons/icon-96.png" style="width:48px;height:48px;border-radius:12px;
-        box-shadow:0 2px 8px rgba(0,0,0,0.3);" />
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:800;margin-bottom:3px;">
-          Install SUK Bangalore
-        </div>
-        <div style="font-size:11px;opacity:0.75;line-height:1.4">
-          Add to home screen — opens like a native app, no browser bar
-        </div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
-        <button id="suk-install-btn"
-          style="background:#fff;border:none;color:#1d4ed8;padding:8px 18px;
-            border-radius:20px;cursor:pointer;font-size:12px;font-weight:900;
-            box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-          Install
-        </button>
-        <button id="suk-dismiss-btn"
-          style="background:none;border:none;color:rgba(255,255,255,0.55);
-            font-size:11px;cursor:pointer;text-align:center;padding:2px 0;">
-          Not now
-        </button>
-      </div>
-    </div>
-    <style>@keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}</style>`;
-  document.body.appendChild(b);
+  function addAnim(name, kf) {
+    var s = document.createElement('style');
+    s.textContent = '@keyframes ' + name + '{' + kf + '}';
+    document.head.appendChild(s);
+  }
 
-  document.getElementById('suk-install-btn').addEventListener('click', async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      deferredPrompt = null;
-    }
-    b.remove();
-  });
-  document.getElementById('suk-dismiss-btn').addEventListener('click', () => {
-    sessionStorage.setItem(DISMISSED_KEY, '1');
-    b.remove();
-  });
-}
+  // ── Android banner ───────────────────────────────────────────────
+  function showAndroidBanner() {
+    if (document.getElementById('suk-pwa')) return;
+    addAnim('sukSlide', 'from{transform:translateY(90px);opacity:0}to{transform:translateY(0);opacity:1}');
 
+    var wrap = css(document.createElement('div'),
+      'position:fixed;bottom:70px;left:12px;right:12px;z-index:99999;' +
+      'background:linear-gradient(135deg,#0e2266,#1d4ed8);color:#fff;' +
+      'padding:14px 16px;border-radius:18px;' +
+      'box-shadow:0 8px 32px rgba(14,34,102,0.5);' +
+      'display:flex;align-items:center;gap:12px;font-family:sans-serif;' +
+      'animation:sukSlide 0.35s ease;');
+    wrap.id = 'suk-pwa';
 
-// ── Global dismiss helpers (must be global scope for inline onclick) ──
-function dismissIOSGuide() {
-  const g = document.getElementById('suk-ios-guide');
-  if (g) g.remove();
-  sessionStorage.setItem('suk_install_dismissed', '1');
-}
-function dismissAndroidBanner() {
-  const b = document.getElementById('suk-install-banner');
-  if (b) b.remove();
-  sessionStorage.setItem('suk_install_dismissed', '1');
-}
+    var icon = css(document.createElement('img'), 'width:44px;height:44px;border-radius:10px;flex-shrink:0;');
+    icon.src = 'icons/icon-96.png';
 
-// ── iOS install guide ───────────────────────────────────
-function showIOSGuide() {
-  if (document.getElementById('suk-ios-guide')) return;
-  const b = document.createElement('div');
-  b.id = 'suk-ios-guide';
-  b.innerHTML = `
-    <div style="position:fixed;bottom:0;left:0;right:0;z-index:99999;
-      background:#fff;border-radius:24px 24px 0 0;
-      box-shadow:0 -8px 40px rgba(14,34,102,0.18);
-      font-family:sans-serif;overflow:hidden;
-      animation:slideUpFull 0.35s cubic-bezier(.34,1.56,.64,1);">
+    var txt = css(document.createElement('div'), 'flex:1;min-width:0;');
+    var t1  = css(document.createElement('div'), 'font-size:13px;font-weight:800;margin-bottom:3px;');
+    t1.textContent = 'Install SUK Bangalore';
+    var t2  = css(document.createElement('div'), 'font-size:11px;opacity:0.75;line-height:1.4;');
+    t2.textContent = 'Opens like a native app — no browser bar';
+    txt.appendChild(t1); txt.appendChild(t2);
 
-      <!-- Handle bar -->
-      <div style="width:40px;height:4px;background:rgba(0,0,0,0.12);
-        border-radius:2px;margin:12px auto 0;"></div>
+    var btns = css(document.createElement('div'), 'display:flex;flex-direction:column;gap:7px;flex-shrink:0;');
+    btns.appendChild(btn('Install',
+      'background:#fff;border:none;color:#1d4ed8;padding:8px 18px;' +
+      'border-radius:20px;cursor:pointer;font-size:12px;font-weight:900;',
+      function() {
+        if (prompt_) { prompt_.prompt(); prompt_.userChoice.then(function() { prompt_ = null; }); }
+        remove_('suk-pwa');
+      }
+    ));
+    btns.appendChild(btn('Not now',
+      'background:none;border:none;color:rgba(255,255,255,0.5);font-size:11px;cursor:pointer;',
+      function() { sessionStorage.setItem(SKIP, '1'); remove_('suk-pwa'); }
+    ));
 
-      <!-- Header -->
-      <div style="display:flex;align-items:center;gap:14px;padding:18px 20px 14px">
-        <img src="icons/icon-96.png" style="width:52px;height:52px;border-radius:14px;
-          box-shadow:0 3px 12px rgba(29,78,216,0.25);" />
-        <div>
-          <div style="font-size:16px;font-weight:800;color:#1e3a8a;">SUK Bangalore</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:2px;">
-            " + window.location.hostname + "
-          </div>
-        </div>
-        <button onclick="dismissIOSGuide()"
-          style="margin-left:auto;background:rgba(107,114,128,0.1);border:none;
-            width:28px;height:28px;border-radius:50%;cursor:pointer;
-            font-size:14px;color:#6b7280;display:flex;align-items:center;justify-content:center;">✕</button>
-      </div>
+    wrap.appendChild(icon); wrap.appendChild(txt); wrap.appendChild(btns);
+    document.body.appendChild(wrap);
+  }
 
-      <!-- Divider -->
-      <div style="height:1px;background:rgba(0,0,0,0.06);margin:0 20px;"></div>
+  // ── iOS bottom sheet ─────────────────────────────────────────────
+  function showIOSSheet() {
+    if (document.getElementById('suk-pwa')) return;
+    addAnim('sukUp', 'from{transform:translateY(100%)}to{transform:translateY(0)}');
 
-      <!-- Steps -->
-      <div style="padding:16px 20px 8px">
-        <div style="font-size:12px;font-weight:800;color:#1d4ed8;
-          letter-spacing:0.8px;text-transform:uppercase;margin-bottom:14px;">
-          Add to Home Screen — 2 taps
-        </div>
+    // Backdrop
+    var bd = css(document.createElement('div'),
+      'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:99998;');
+    bd.addEventListener('click', function() {
+      sessionStorage.setItem(SKIP, '1');
+      bd.remove(); remove_('suk-pwa');
+    });
 
-        <!-- Step 1 -->
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-          <div style="width:36px;height:36px;border-radius:10px;flex-shrink:0;
-            background:rgba(29,78,216,0.1);display:flex;align-items:center;
-            justify-content:center;font-size:20px;">
-            ⬆️
-          </div>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:#1e3a8a;">
-              Tap the Share button
-            </div>
-            <div style="font-size:11px;color:#6b7280;margin-top:2px;">
-              The <b>⬆️ Share</b> icon at the bottom of Safari
-            </div>
-          </div>
-        </div>
+    // Sheet
+    var sheet = css(document.createElement('div'),
+      'position:fixed;bottom:0;left:0;right:0;z-index:99999;' +
+      'background:#fff;border-radius:22px 22px 0 0;' +
+      'box-shadow:0 -6px 40px rgba(0,0,0,0.15);font-family:sans-serif;' +
+      'padding:0 0 36px;animation:sukUp 0.3s ease;');
+    sheet.id = 'suk-pwa';
 
-        <!-- Step 2 -->
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
-          <div style="width:36px;height:36px;border-radius:10px;flex-shrink:0;
-            background:rgba(29,78,216,0.1);display:flex;align-items:center;
-            justify-content:center;font-size:20px;">
-            ➕
-          </div>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:#1e3a8a;">
-              Tap "Add to Home Screen"
-            </div>
-            <div style="font-size:11px;color:#6b7280;margin-top:2px;">
-              Scroll down in the share sheet and tap <b>Add to Home Screen</b>
-            </div>
-          </div>
-        </div>
+    // Handle bar
+    sheet.appendChild(css(document.createElement('div'),
+      'width:38px;height:4px;background:rgba(0,0,0,0.14);' +
+      'border-radius:2px;margin:12px auto 16px;'));
 
-        <!-- Result -->
-        <div style="background:linear-gradient(135deg,rgba(29,78,216,0.07),rgba(59,130,246,0.05));
-          border:1px solid rgba(29,78,216,0.12);border-radius:14px;
-          padding:12px 14px;margin-bottom:20px;
-          display:flex;align-items:center;gap:10px;">
-          <span style="font-size:20px">✅</span>
-          <div style="font-size:12px;color:#1e3a8a;font-weight:600;line-height:1.5">
-            App icon appears on your home screen.<br/>
-            Opens fullscreen — no browser bar!
-          </div>
-        </div>
-      </div>
+    // Header
+    var hdr = css(document.createElement('div'),
+      'display:flex;align-items:center;gap:12px;padding:0 20px 14px;');
+    var hIcon = css(document.createElement('img'),
+      'width:48px;height:48px;border-radius:12px;flex-shrink:0;' +
+      'box-shadow:0 2px 10px rgba(29,78,216,0.2);');
+    hIcon.src = 'icons/icon-96.png';
+    var hTxt = document.createElement('div');
+    var hN = css(document.createElement('div'),
+      'font-size:15px;font-weight:800;color:#1e3a8a;');
+    hN.textContent = 'SUK Bangalore';
+    var hS = css(document.createElement('div'),
+      'font-size:11px;color:#9ca3af;margin-top:2px;');
+    hS.textContent = 'Install as App — Free';
+    hTxt.appendChild(hN); hTxt.appendChild(hS);
 
-      <!-- Arrow pointing to share button -->
-      <div style="text-align:center;padding-bottom:36px;">
-        <div style="display:inline-flex;align-items:center;gap:6px;
-          background:rgba(29,78,216,0.08);padding:8px 18px;border-radius:20px;">
-          <span style="font-size:16px;">⬇️</span>
-          <span style="font-size:12px;font-weight:700;color:#1d4ed8;">
-            Share button is at the bottom of your screen
-          </span>
-        </div>
-      </div>
-    </div>
-    <div onclick="dismissIOSGuide()"
-      style="position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:99998;"></div>
-    <style>@keyframes slideUpFull{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>`;
-  document.body.appendChild(b);
-}
+    var xBtn = btn('x',
+      'margin-left:auto;background:rgba(0,0,0,0.07);border:none;' +
+      'width:30px;height:30px;border-radius:50%;cursor:pointer;' +
+      'font-size:14px;color:#6b7280;flex-shrink:0;',
+      function() {
+        sessionStorage.setItem(SKIP, '1');
+        bd.remove(); remove_('suk-pwa');
+      }
+    );
+    // Use x instead of emoji to avoid encoding issues
+    xBtn.textContent = '\u2715';
 
-// ── "New version available" toast ──────────────────────
-function showUpdateBanner() {
-  const b = document.createElement('div');
-  b.innerHTML = `
-    <div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);
-      z-index:99999;background:#1d4ed8;color:#fff;padding:10px 18px;border-radius:30px;
-      box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;align-items:center;gap:10px;
-      font-family:sans-serif;font-size:13px;font-weight:600;white-space:nowrap;
-      animation:fadeIn 0.3s ease;">
-      🪷 New version available
-      <button onclick="window.location.reload()" style="background:rgba(255,255,255,0.25);
-        border:none;color:#fff;padding:5px 14px;border-radius:20px;cursor:pointer;
-        font-size:12px;font-weight:700;">Update now</button>
-    </div>
-    <style>@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>`;
-  document.body.appendChild(b);
-  setTimeout(() => b.remove(), 12000);
-}
+    hdr.appendChild(hIcon); hdr.appendChild(hTxt); hdr.appendChild(xBtn);
+    sheet.appendChild(hdr);
+
+    // Divider
+    sheet.appendChild(css(document.createElement('div'),
+      'height:1px;background:rgba(0,0,0,0.07);margin:0 20px 16px;'));
+
+    // Steps
+    var steps = css(document.createElement('div'),
+      'padding:0 20px;display:flex;flex-direction:column;gap:14px;');
+    [
+      ['Step 1', 'Tap the \u2B06 Share button at the bottom of Safari'],
+      ['Step 2', 'Scroll and tap \u2795 "Add to Home Screen"'],
+      ['Done!',  'App icon appears on home screen. Opens fullscreen!']
+    ].forEach(function(row) {
+      var r = css(document.createElement('div'),
+        'display:flex;align-items:flex-start;gap:12px;');
+      var badge = css(document.createElement('div'),
+        'font-size:11px;font-weight:800;color:#1d4ed8;' +
+        'background:rgba(29,78,216,0.09);padding:5px 10px;' +
+        'border-radius:20px;white-space:nowrap;flex-shrink:0;line-height:1.5;');
+      badge.textContent = row[0];
+      var desc = css(document.createElement('div'),
+        'font-size:13px;color:#374151;line-height:1.6;padding-top:3px;');
+      desc.textContent = row[1];
+      r.appendChild(badge); r.appendChild(desc);
+      steps.appendChild(r);
+    });
+    sheet.appendChild(steps);
+
+    // Arrow hint
+    var hint = css(document.createElement('div'),
+      'text-align:center;margin-top:18px;padding:0 20px;');
+    var hintInner = css(document.createElement('div'),
+      'display:inline-block;background:rgba(29,78,216,0.08);' +
+      'padding:9px 20px;border-radius:20px;' +
+      'font-size:12px;font-weight:700;color:#1d4ed8;');
+    hintInner.textContent = '\u2B07 Share button is at the bottom of Safari';
+    hint.appendChild(hintInner);
+    sheet.appendChild(hint);
+
+    document.body.appendChild(bd);
+    document.body.appendChild(sheet);
+  }
+
+  // ── Update toast ─────────────────────────────────────────────────
+  function showUpdateToast() {
+    var toast = css(document.createElement('div'),
+      'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99999;' +
+      'background:#1d4ed8;color:#fff;padding:10px 18px;border-radius:30px;' +
+      'box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;align-items:center;' +
+      'gap:10px;font-family:sans-serif;font-size:13px;font-weight:600;white-space:nowrap;');
+    var msg = document.createElement('span');
+    msg.textContent = 'New version available';
+    toast.appendChild(msg);
+    toast.appendChild(btn('Update',
+      'background:rgba(255,255,255,0.25);border:none;color:#fff;' +
+      'padding:5px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;',
+      function() { window.location.reload(); }
+    ));
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 12000);
+  }
+
+})();
 </script>
 </body>
 </html>
