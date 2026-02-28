@@ -676,19 +676,27 @@
 
 <script type="text/babel">
 
-// ╔══════════════════════════════════════════════════════╗
-//  APP CONFIGURATION — CHANGE THIS WHEN MOVING TO A NEW URL
-// ╚══════════════════════════════════════════════════════╝
+// ╔══════════════════════════════════════════════════════════════╗
+//  APP CONFIG — THE ONLY PLACE YOU NEED TO EDIT
+//  Change basePath when you rename your GitHub repo
+//  Change apkUrl when you upload a new APK release
+// ╚══════════════════════════════════════════════════════════════╝
 const APP_CONFIG = {
 
-  // Your GitHub Pages folder name in the URL.
-  // URL:  https://bangaloresuk.github.io/bsuk/  → basePath: "/bsuk/"
-  // URL:  https://yourname.github.io/myapp/     → basePath: "/myapp/"
-  // URL:  https://yoursite.com/                 → basePath: "/"
+  // Your GitHub Pages repo folder name
+  // URL: https://bangaloresuk.github.io/bsuk/  → basePath: "/bsuk/"
   basePath: "/bsuk/",
 
+  // APK download link — upload your APK to GitHub Releases and paste the link here
+  // How to get this link:
+  //   1. Go to your GitHub repo → Releases → Create a new release
+  //   2. Upload your .apk file
+  //   3. Copy the download link and paste below
+  // Example: "https://github.com/bangaloresuk/bsuk/releases/latest/download/suk-bangalore.apk"
+  apkUrl: "https://github.com/bangaloresuk/bsuk/releases/download/newapkl/SUK.Bangalore.apk",
+
 };
-// ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 
 // ============================================================
 //  MULTI-SUK CONFIGURATION
@@ -3647,16 +3655,19 @@ function AppShell() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
 </script>
-
 <script>
+// ══════════════════════════════════════════════════
+//  SUK PWA — Android APK Download Bar
+//  Reads APP_CONFIG.basePath and APP_CONFIG.apkUrl
+// ══════════════════════════════════════════════════
 (function() {
-  var BASE    = (typeof APP_CONFIG !== 'undefined' ? APP_CONFIG.basePath : '/bsuk/');
-  var IS_IOS  = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  var BASE    = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.basePath) || '/bsuk/';
+  var APK_URL = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.apkUrl)   || '#';
   var IS_SA   = window.matchMedia('(display-mode: standalone)').matches
                 || window.navigator.standalone === true;
-  var SKIP    = 'suk_skip';
-  var prompt_ = null;
+  var deferred = null;
 
+  // ── Service Worker ──────────────────────────────
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
@@ -3668,176 +3679,100 @@ ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
                 showUpdateToast();
             });
           });
-        }).catch(function(e){ console.log('SW error', e); });
+        }).catch(function(){});
     });
   }
 
+  // Capture Chrome install prompt (PWA)
   window.addEventListener('beforeinstallprompt', function(e) {
     e.preventDefault();
-    prompt_ = e;
-    if (!IS_SA && !sessionStorage.getItem(SKIP))
-      setTimeout(showAndroidBanner, 2500);
-  });
-  window.addEventListener('appinstalled', function() { remove_('suk-pwa'); });
-
-  window.addEventListener('load', function() {
-    if (!IS_IOS || IS_SA || sessionStorage.getItem(SKIP)) return;
-    setTimeout(showIOSSheet, 2500);
+    deferred = e;
   });
 
-  function remove_(id) { var el = document.getElementById(id); if (el) el.remove(); }
-  function css(el, s)  { el.style.cssText = s; return el; }
-  function mkBtn(text, s, fn) {
-    var b = css(document.createElement('button'), s);
-    b.textContent = text;
-    b.addEventListener('click', fn);
-    return b;
-  }
-  function addAnim(name, kf) {
-    var s = document.createElement('style');
-    s.textContent = '@keyframes ' + name + '{' + kf + '}';
-    document.head.appendChild(s);
-  }
+  // ── Build the download badge ─────────────────────
+  function buildBadge() {
+    // Add styles
+    var style = document.createElement('style');
+    style.textContent =
+      '#suk-apk-bar{' +
+        'position:fixed;bottom:0;left:0;right:0;z-index:99990;' +
+        'display:flex;justify-content:center;align-items:center;' +
+        'padding:10px 16px calc(10px + env(safe-area-inset-bottom));' +
+        'background:linear-gradient(to top,rgba(255,255,255,0.98),rgba(255,255,255,0.93));' +
+        'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' +
+        'border-top:1px solid rgba(29,78,216,0.1);' +
+        'box-shadow:0 -4px 20px rgba(29,78,216,0.08);}' +
 
-  function showAndroidBanner() {
-    if (document.getElementById('suk-pwa')) return;
-    addAnim('sukSlide','from{transform:translateY(90px);opacity:0}to{transform:translateY(0);opacity:1}');
-    var wrap = css(document.createElement('div'),
-      'position:fixed;bottom:70px;left:12px;right:12px;z-index:99999;'+
-      'background:linear-gradient(135deg,#0e2266,#1d4ed8);color:#fff;'+
-      'padding:14px 16px;border-radius:18px;'+
-      'box-shadow:0 8px 32px rgba(14,34,102,0.5);'+
-      'display:flex;align-items:center;gap:12px;font-family:sans-serif;'+
-      'animation:sukSlide 0.35s ease;');
-    wrap.id = 'suk-pwa';
-    var icon = css(document.createElement('img'),
-      'width:44px;height:44px;border-radius:10px;flex-shrink:0;');
-    icon.src = BASE + 'icons/icon-96.png';
-    var txt = css(document.createElement('div'),'flex:1;min-width:0;');
-    var t1  = css(document.createElement('div'),'font-size:14px;font-weight:800;margin-bottom:3px;');
-    t1.textContent = 'Install SUK Bangalore';
-    var t2  = css(document.createElement('div'),'font-size:11px;opacity:0.75;line-height:1.4;');
-    t2.textContent = 'Add to home screen — opens like a native app';
-    txt.appendChild(t1); txt.appendChild(t2);
-    var btns = css(document.createElement('div'),
-      'display:flex;flex-direction:column;gap:7px;flex-shrink:0;');
-    btns.appendChild(mkBtn('Install',
-      'background:#fff;border:none;color:#1d4ed8;padding:8px 18px;'+
-      'border-radius:20px;cursor:pointer;font-size:12px;font-weight:900;',
-      function() {
-        if (prompt_) { prompt_.prompt(); prompt_.userChoice.then(function(){ prompt_=null; }); }
-        remove_('suk-pwa');
-      }
-    ));
-    btns.appendChild(mkBtn('Not now',
-      'background:none;border:none;color:rgba(255,255,255,0.55);font-size:11px;cursor:pointer;',
-      function() { sessionStorage.setItem(SKIP,'1'); remove_('suk-pwa'); }
-    ));
-    wrap.appendChild(icon); wrap.appendChild(txt); wrap.appendChild(btns);
-    document.body.appendChild(wrap);
-  }
+      '#suk-apk-badge{' +
+        'display:inline-flex;align-items:center;gap:12px;' +
+        'background:#000;color:#fff;' +
+        'padding:8px 22px 8px 16px;' +
+        'border-radius:10px;' +
+        'border:none;cursor:pointer;' +
+        'box-shadow:0 4px 18px rgba(0,0,0,0.3);' +
+        'transition:transform 0.15s,box-shadow 0.15s;' +
+        'text-decoration:none;font-family:sans-serif;}' +
 
-  function showIOSSheet() {
-    if (document.getElementById('suk-pwa')) return;
-    addAnim('sukUp','from{transform:translateY(100%)}to{transform:translateY(0)}');
+      '#suk-apk-badge:active{transform:scale(0.96);box-shadow:0 2px 10px rgba(0,0,0,0.25);}' +
 
-    var bd = css(document.createElement('div'),
-      'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:99998;');
-    function dismiss() {
-      sessionStorage.setItem(SKIP,'1');
-      bd.remove(); remove_('suk-pwa');
-    }
-    bd.addEventListener('click', dismiss);
+      '#suk-apk-badge .badge-icon{font-size:32px;line-height:1;flex-shrink:0;}' +
 
-    var sheet = css(document.createElement('div'),
-      'position:fixed;bottom:0;left:0;right:0;z-index:99999;'+
-      'background:#fff;border-radius:22px 22px 0 0;'+
-      'box-shadow:0 -6px 40px rgba(0,0,0,0.15);font-family:sans-serif;'+
-      'padding-bottom:36px;animation:sukUp 0.3s ease;');
-    sheet.id = 'suk-pwa';
+      '#suk-apk-badge .badge-text{display:flex;flex-direction:column;text-align:left;line-height:1;}' +
+      '#suk-apk-badge .badge-small{font-size:10px;font-weight:600;opacity:0.75;' +
+        'letter-spacing:0.5px;text-transform:uppercase;margin-bottom:3px;}' +
+      '#suk-apk-badge .badge-big{font-size:20px;font-weight:800;letter-spacing:-0.3px;}' +
 
-    sheet.appendChild(css(document.createElement('div'),
-      'width:38px;height:4px;background:rgba(0,0,0,0.14);'+
-      'border-radius:2px;margin:12px auto 16px;'));
+      '/* push page content up so bar never covers content */' +
+      '#root{padding-bottom:76px;}';
+    document.head.appendChild(style);
 
-    var hdr = css(document.createElement('div'),
-      'display:flex;align-items:center;gap:12px;padding:0 20px 14px;');
-    var hImg = css(document.createElement('img'),
-      'width:52px;height:52px;border-radius:14px;flex-shrink:0;'+
-      'box-shadow:0 2px 10px rgba(29,78,216,0.25);');
-    hImg.src = BASE + 'icons/icon-96.png';
-    var hTxt = document.createElement('div');
-    var hN = css(document.createElement('div'),
-      'font-size:16px;font-weight:800;color:#1e3a8a;');
-    hN.textContent = 'SUK Bangalore';
-    var hS = css(document.createElement('div'),
-      'font-size:11px;color:#9ca3af;margin-top:2px;');
-    hS.textContent = 'Install as App — Free';
-    hTxt.appendChild(hN); hTxt.appendChild(hS);
-    hdr.appendChild(hImg); hdr.appendChild(hTxt);
-    hdr.appendChild(mkBtn('✕',
-      'margin-left:auto;background:rgba(0,0,0,0.07);border:none;'+
-      'width:30px;height:30px;border-radius:50%;cursor:pointer;'+
-      'font-size:15px;color:#6b7280;flex-shrink:0;',
-      dismiss
-    ));
-    sheet.appendChild(hdr);
+    var bar = document.createElement('div');
+    bar.id = 'suk-apk-bar';
 
-    sheet.appendChild(css(document.createElement('div'),
-      'height:1px;background:rgba(0,0,0,0.07);margin:0 20px 16px;'));
+    var badge = document.createElement('a');
+    badge.id   = 'suk-apk-badge';
+    badge.href = APK_URL;
 
-    var steps = css(document.createElement('div'),
-      'padding:0 20px;display:flex;flex-direction:column;gap:16px;');
-    [
-      ['1', 'Tap the Share ↑ button at the bottom of Safari'],
-      ['2', 'Scroll down and tap + "Add to Home Screen"'],
-      ['✓', 'App saves to your home screen. Opens fullscreen!']
-    ].forEach(function(row) {
-      var r = css(document.createElement('div'),
-        'display:flex;align-items:flex-start;gap:12px;');
-      var badge = css(document.createElement('div'),
-        'width:28px;height:28px;border-radius:50%;flex-shrink:0;'+
-        'background:linear-gradient(135deg,#1d4ed8,#3b82f6);'+
-        'display:flex;align-items:center;justify-content:center;'+
-        'font-size:13px;font-weight:900;color:#fff;margin-top:2px;');
-      badge.textContent = row[0];
-      var desc = css(document.createElement('div'),
-        'font-size:13px;color:#374151;line-height:1.6;');
-      desc.textContent = row[1];
-      r.appendChild(badge); r.appendChild(desc);
-      steps.appendChild(r);
-    });
-    sheet.appendChild(steps);
+    // For .apk files — force download, don't open in browser
+    badge.setAttribute('download', 'suk-bangalore.apk');
 
-    var hint = css(document.createElement('div'),
-      'margin:18px 20px 0;background:rgba(29,78,216,0.07);'+
-      'border-radius:12px;padding:10px 14px;text-align:center;');
-    var hintSpan = css(document.createElement('span'),
-      'font-size:12px;font-weight:700;color:#1d4ed8;');
-    hintSpan.textContent = 'Look for the Share button at the bottom of Safari';
-    hint.appendChild(hintSpan);
-    sheet.appendChild(hint);
+    badge.innerHTML =
+      '<span class="badge-icon">🪷</span>' +
+      '<span class="badge-text">' +
+        '<span class="badge-small">Download for</span>' +
+        '<span class="badge-big">Android</span>' +
+      '</span>';
 
-    document.body.appendChild(bd);
-    document.body.appendChild(sheet);
+    bar.appendChild(badge);
+    document.body.appendChild(bar);
   }
 
+  // ── Update toast ─────────────────────────────────
   function showUpdateToast() {
-    var t = css(document.createElement('div'),
-      'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99999;'+
-      'background:#1d4ed8;color:#fff;padding:10px 18px;border-radius:30px;'+
-      'box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;align-items:center;'+
-      'gap:10px;font-family:sans-serif;font-size:13px;font-weight:600;white-space:nowrap;');
+    var t = document.createElement('div');
+    t.style.cssText =
+      'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99999;' +
+      'background:#1d4ed8;color:#fff;padding:10px 18px;border-radius:30px;' +
+      'box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;align-items:center;' +
+      'gap:10px;font-family:sans-serif;font-size:13px;font-weight:600;white-space:nowrap;';
     var msg = document.createElement('span');
     msg.textContent = 'New version available';
-    t.appendChild(msg);
-    t.appendChild(mkBtn('Update',
-      'background:rgba(255,255,255,0.25);border:none;color:#fff;'+
-      'padding:5px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;',
-      function(){ window.location.reload(); }
-    ));
+    var btn = document.createElement('button');
+    btn.textContent = 'Update';
+    btn.style.cssText =
+      'background:rgba(255,255,255,0.25);border:none;color:#fff;' +
+      'padding:5px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;';
+    btn.addEventListener('click', function() { window.location.reload(); });
+    t.appendChild(msg); t.appendChild(btn);
     document.body.appendChild(t);
-    setTimeout(function(){ t.remove(); }, 12000);
+    setTimeout(function() { t.remove(); }, 12000);
+  }
+
+  // Build as soon as DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', buildBadge);
+  } else {
+    buildBadge();
   }
 
 })();
