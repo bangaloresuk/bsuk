@@ -3653,9 +3653,7 @@ const DISMISSED_KEY = 'suk_install_dismissed';
 // ── Register Service Worker ─────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Dynamically detect the base path so it works on any GitHub Pages URL
-    const swScope = location.pathname.replace(/\/[^\/]*$/, '/') || '/';
-    navigator.serviceWorker.register(swScope + 'sw.js', { scope: swScope })
+    navigator.serviceWorker.register('/bangalore-suk/sw.js', { scope: '/bangalore-suk/' })
       .then(reg => {
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
@@ -3748,19 +3746,6 @@ function showAndroidBanner() {
   });
 }
 
-
-// ── Global dismiss helpers (must be global scope for inline onclick) ──
-function dismissIOSGuide() {
-  const g = document.getElementById('suk-ios-guide');
-  if (g) g.remove();
-  sessionStorage.setItem('suk_install_dismissed', '1');
-}
-function dismissAndroidBanner() {
-  const b = document.getElementById('suk-install-banner');
-  if (b) b.remove();
-  sessionStorage.setItem('suk_install_dismissed', '1');
-}
-
 // ── iOS install guide ───────────────────────────────────
 function showIOSGuide() {
   if (document.getElementById('suk-ios-guide')) return;
@@ -3784,10 +3769,10 @@ function showIOSGuide() {
         <div>
           <div style="font-size:16px;font-weight:800;color:#1e3a8a;">SUK Bangalore</div>
           <div style="font-size:12px;color:#6b7280;margin-top:2px;">
-            " + window.location.hostname + "
+            badalbks1992.github.io
           </div>
         </div>
-        <button onclick="dismissIOSGuide()"
+        <button onclick="document.getElementById('suk-ios-guide').remove();sessionStorage.setItem('${DISMISSED_KEY}','1')"
           style="margin-left:auto;background:rgba(107,114,128,0.1);border:none;
             width:28px;height:28px;border-radius:50%;cursor:pointer;
             font-size:14px;color:#6b7280;display:flex;align-items:center;justify-content:center;">✕</button>
@@ -3861,7 +3846,7 @@ function showIOSGuide() {
         </div>
       </div>
     </div>
-    <div onclick="dismissIOSGuide()"
+    <div onclick="document.getElementById('suk-ios-guide').remove();sessionStorage.setItem('${DISMISSED_KEY}','1')"
       style="position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:99998;"></div>
     <style>@keyframes slideUpFull{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>`;
   document.body.appendChild(b);
