@@ -1,0 +1,40 @@
+{
+  "name": "Satsang Upayojana Kendra",
+  "short_name": "SUK Bangalore",
+  "description": "Book prayer slots and satsang events for Satsang Upayojana Kendra, Bangalore",
+  "start_url": "/bangalore-suk/",
+  "scope": "/bangalore-suk/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e2266",
+  "theme_color": "#1d4ed8",
+  "lang": "en-IN",
+  "categories": ["lifestyle", "social"],
+  "icons": [
+    { "src": "icons/icon-72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Book Prayer",
+      "short_name": "Prayer",
+      "description": "Book a prayer slot",
+      "url": "/bangalore-suk/?tab=book",
+      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "All Bookings",
+      "short_name": "Bookings",
+      "description": "View all bookings",
+      "url": "/bangalore-suk/?tab=manage",
+      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+    }
+  ]
+}

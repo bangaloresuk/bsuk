@@ -2,8 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Jayguru — Satsang Upayojana Kendra</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#1d4ed8" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="SUK Bangalore" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144.png" />
+<link rel="shortcut icon" href="icons/icon-96.png" type="image/png" />
+<meta name="description" content="Book prayer slots and satsang events — Satsang Upayojana Kendra, Bangalore" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -3624,6 +3637,93 @@ function AppShell() {
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
+</script>
+
+<script>
+// ── Register Service Worker ──────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/bangalore-suk/sw.js', { scope: '/bangalore-suk/' })
+      .then(reg => {
+        console.log('[SUK PWA] Service worker registered');
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner();
+            }
+          });
+        });
+      })
+      .catch(err => console.log('[SUK PWA] SW failed:', err));
+  });
+}
+
+// ── "New version available" banner ──────────────────────────────
+function showUpdateBanner() {
+  const b = document.createElement('div');
+  b.innerHTML = `<div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+    z-index:99999;background:#1d4ed8;color:#fff;padding:12px 20px;border-radius:30px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;align-items:center;gap:12px;
+    font-family:sans-serif;font-size:13px;font-weight:600;white-space:nowrap;">
+    🪷 New version available
+    <button onclick="window.location.reload()" style="background:rgba(255,255,255,0.25);
+      border:none;color:#fff;padding:5px 14px;border-radius:20px;cursor:pointer;
+      font-size:12px;font-weight:700;">Update</button>
+  </div>`;
+  document.body.appendChild(b);
+  setTimeout(() => b.remove(), 10000);
+}
+
+// ── Android install prompt ───────────────────────────────────────
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  setTimeout(() => {
+    if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+      showInstallBanner();
+    }
+  }, 3000);
+});
+
+function showInstallBanner() {
+  if (document.getElementById('suk-install-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'suk-install-banner';
+  b.innerHTML = `<div style="position:fixed;bottom:80px;left:12px;right:12px;z-index:99999;
+    background:linear-gradient(135deg,#0e2266,#1d4ed8);color:#fff;padding:14px 18px;
+    border-radius:18px;box-shadow:0 6px 24px rgba(14,34,102,0.4);
+    display:flex;align-items:center;gap:12px;font-family:sans-serif;">
+    <span style="font-size:28px">🪷</span>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:800;margin-bottom:2px;">Add to Home Screen</div>
+      <div style="font-size:11px;opacity:0.8;">Install SUK Bangalore for quick access</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button id="suk-install-btn" style="background:rgba(255,255,255,0.2);
+        border:1px solid rgba(255,255,255,0.4);color:#fff;padding:7px 16px;
+        border-radius:20px;cursor:pointer;font-size:12px;font-weight:800;">Install</button>
+      <button onclick="document.getElementById('suk-install-banner').remove()"
+        style="background:none;border:none;color:rgba(255,255,255,0.5);
+          font-size:11px;cursor:pointer;text-align:center;">Not now</button>
+    </div>
+  </div>`;
+  document.body.appendChild(b);
+  document.getElementById('suk-install-btn').addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      b.remove();
+    }
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  const b = document.getElementById('suk-install-banner');
+  if (b) b.remove();
+});
 </script>
 </body>
 </html>
