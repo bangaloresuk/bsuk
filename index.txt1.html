@@ -693,7 +693,7 @@ const APP_CONFIG = {
   //   2. Upload your .apk file
   //   3. Copy the download link and paste below
   // Example: "https://github.com/bangaloresuk/bsuk/releases/latest/download/suk-bangalore.apk"
-  apkUrl: "https://github.com/bangaloresuk/bsuk/releases/download/newapkl/SUK.Bangalore.apk",
+  apkUrl: "SUK.Bangalore.apk",  // APK file in root of your GitHub repo
 
 };
 // ════════════════════════════════════════════════════════════════
@@ -3730,12 +3730,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
     bar.id = 'suk-apk-bar';
 
     var badge = document.createElement('a');
-    badge.id   = 'suk-apk-badge';
-    badge.href = APK_URL;
-
-    // For .apk files — force download, don't open in browser
-    badge.setAttribute('download', 'suk-bangalore.apk');
-
+    badge.id       = 'suk-apk-badge';
+    badge.href     = APK_URL;
+    badge.setAttribute('download', 'SUK.Bangalore.apk'); // same-origin = download attr works!
     badge.innerHTML =
       '<span class="badge-icon">🪷</span>' +
       '<span class="badge-text">' +
