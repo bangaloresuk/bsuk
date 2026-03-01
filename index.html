@@ -687,20 +687,31 @@ const SUK_CONFIG = {
     configured:   true,
     features:     {},
   },
-  "other": {
-    key:          "other",
-    name:         "other Satsang Kendra",
-    shortName:    "other SUK",
-    emoji:        "🌸",
-    themeColor:   "#7c3aed",
-    scriptUrl:    "https://script.google.com/macros/s/AKfycbz-ptMI2wXf8sp_2YCYGIzrbUXstBr5dO10jS4Xd5odfQXQe7Kg5S8rrIWGClpoyQWcIA/exec",
+  "peenya-2nd-stage": {
+    key:          "peenya-2nd-stage",
+    name:         "Peenya 2nd Stage SUK",
+    shortName:    "Peenya 2nd Stage SUK",
+    emoji:        "🪷",
+    themeColor:   "#1d4ed8",
+    scriptUrl:    "https://script.google.com/macros/s/AKfycby_v7lDp5kbvn4Jh3U6f9Sdwam0AY_6EV7KlI-tjBcVwDxFgS37108PmpPOF-G3lGFU/exec",
     apiKey:       "1e267c88ee92686c6e78da0a1ba9eb26023410dc6e171241",
     configured:   true,
-    features:     { satsangBooking:false, photoGallery:false, messages:false },
+    features:     { satsangBooking:false, messages:false },
+  },
+  "banashankari": {
+    key:          "banashankari",
+    name:         "Banashankari SUK",
+    shortName:    "Banashankari SUK",
+    emoji:        "🪷",
+    themeColor:   "#1d4ed8",
+    scriptUrl:    "https://script.google.com/macros/s/AKfycbwaY9lrDbkir6S1vbnjoPNNprlvj0acv3Jqs2XGc11DszroiG6OHjff9I1FxZ8jM7ZUQQ/exec",
+    apiKey:       "1e267c88ee92686c6e78da0a1ba9eb26023410dc6e171241",
+    configured:   true,
+    features:     { satsangBooking:false, messages:false },
   },
 
   // ── COMING SOON — add scriptUrl + apiKey + set configured:true when ready ──
-  "peenya-2nd-stage":           { key:"peenya-2nd-stage",           shortName:"Peenya 2nd Stage SUK",           emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
+  // "peenya-2nd-stage":           { key:"peenya-2nd-stage",           shortName:"Peenya 2nd Stage SUK",           emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
   "itpl-main-road":             { key:"itpl-main-road",             shortName:"ITPL Main Road SUK",             emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
   "sidhappa-layout":            { key:"sidhappa-layout",            shortName:"Sidhappa Layout SUK",            emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
   "bomanahalli":                { key:"bomanahalli",                shortName:"Bomanahalli SUK",                emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
@@ -732,7 +743,7 @@ const SUK_CONFIG = {
   "tavarekere":                 { key:"tavarekere",                 shortName:"Tavarekere SUK",                 emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
   "anjana-nagar":               { key:"anjana-nagar",               shortName:"Anjana Nagar SUK",               emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
   "kundanahalli":               { key:"kundanahalli",               shortName:"Kundanahalli SUK",               emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
-  "banashankari":               { key:"banashankari",               shortName:"Banashankari SUK",               emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
+  // "banashankari":               { key:"banashankari",               shortName:"Banashankari SUK",               emoji:"🪷", themeColor:"#1d4ed8", configured:false, features:{} },
 };
 
 // ── Feature defaults — every SUK starts with ALL features on ──
@@ -3538,10 +3549,10 @@ function SUKSearchDropdown({ selected, onSelect }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Focus input when opened
-  React.useEffect(() => {
-    if (isOpen && inputRef.current) inputRef.current.focus();
-  }, [isOpen]);
+  // Don't auto-focus — let user tap search manually to avoid mobile keyboard popup
+  // React.useEffect(() => {
+  //   if (isOpen && inputRef.current) inputRef.current.focus();
+  // }, [isOpen]);
 
   // Scroll highlighted item into view
   React.useEffect(() => {
