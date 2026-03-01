@@ -684,16 +684,23 @@
 const APP_CONFIG = {
 
   // Your GitHub Pages repo folder name
-  // URL: https://bangaloresuk.github.io/bsuk/  → basePath: "/bsuk/"
   basePath: "/bsuk/",
 
-  // APK download link — upload your APK to GitHub Releases and paste the link here
-  // How to get this link:
-  //   1. Go to your GitHub repo → Releases → Create a new release
-  //   2. Upload your .apk file
-  //   3. Copy the download link and paste below
-  // Example: "https://github.com/bangaloresuk/bsuk/releases/latest/download/suk-bangalore.apk"
-  apkUrl: "SUK.Bangalore.apk",  // APK file in root of your GitHub repo
+  // APK file — placed in root of your GitHub repo
+  apkUrl: "SUK.Bangalore.apk",
+
+  // ── Firebase Push Notifications ──────────────────────────────
+  // Get these from: Firebase Console → Project Settings
+  firebase: {
+    apiKey:            "AIzaSyCQi16rvq5Y-8358TdsyZ_QJqFG06cgCxU",
+    authDomain:        "suk-bangalore.firebaseapp.com",
+    projectId:         "suk-bangalore",
+    storageBucket:     "suk-bangalore.firebasestorage.app",
+    messagingSenderId: "571610723170",
+    appId:             "1:571610723170:web:e6e080576b30da7a49723b",
+    // VAPID key: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
+    vapidKey: "BKhB8BA0mNROMqi7gAwayDbQqJWlBue11MjH3gi66MbMVb8_W-C79tCDltuQHGr2wTxkZzXcfofda_fP5SEoqSg"
+  },
 
 };
 // ════════════════════════════════════════════════════════════════
@@ -3697,33 +3704,33 @@ ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
       '#suk-apk-bar{' +
         'position:fixed;bottom:0;left:0;right:0;z-index:99990;' +
         'display:flex;justify-content:center;align-items:center;' +
-        'padding:10px 16px calc(10px + env(safe-area-inset-bottom));' +
+        'padding:6px 16px calc(6px + env(safe-area-inset-bottom));' +
         'background:linear-gradient(to top,rgba(255,255,255,0.98),rgba(255,255,255,0.93));' +
         'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' +
         'border-top:1px solid rgba(29,78,216,0.1);' +
         'box-shadow:0 -4px 20px rgba(29,78,216,0.08);}' +
 
       '#suk-apk-badge{' +
-        'display:inline-flex;align-items:center;gap:12px;' +
+        'display:inline-flex;align-items:center;gap:8px;' +
         'background:#000;color:#fff;' +
-        'padding:8px 22px 8px 16px;' +
-        'border-radius:10px;' +
+        'padding:6px 14px 6px 10px;' +
+        'border-radius:8px;' +
         'border:none;cursor:pointer;' +
-        'box-shadow:0 4px 18px rgba(0,0,0,0.3);' +
+        'box-shadow:0 2px 10px rgba(0,0,0,0.25);' +
         'transition:transform 0.15s,box-shadow 0.15s;' +
         'text-decoration:none;font-family:sans-serif;}' +
 
-      '#suk-apk-badge:active{transform:scale(0.96);box-shadow:0 2px 10px rgba(0,0,0,0.25);}' +
+      '#suk-apk-badge:active{transform:scale(0.96);box-shadow:0 1px 6px rgba(0,0,0,0.2);}' +
 
-      '#suk-apk-badge .badge-icon{font-size:32px;line-height:1;flex-shrink:0;}' +
+      '#suk-apk-badge .badge-icon{font-size:20px;line-height:1;flex-shrink:0;}' +
 
       '#suk-apk-badge .badge-text{display:flex;flex-direction:column;text-align:left;line-height:1;}' +
-      '#suk-apk-badge .badge-small{font-size:10px;font-weight:600;opacity:0.75;' +
-        'letter-spacing:0.5px;text-transform:uppercase;margin-bottom:3px;}' +
-      '#suk-apk-badge .badge-big{font-size:20px;font-weight:800;letter-spacing:-0.3px;}' +
+      '#suk-apk-badge .badge-small{font-size:9px;font-weight:600;opacity:0.75;' +
+        'letter-spacing:0.5px;text-transform:uppercase;margin-bottom:2px;}' +
+      '#suk-apk-badge .badge-big{font-size:14px;font-weight:800;letter-spacing:-0.2px;}' +
 
       '/* push page content up so bar never covers content */' +
-      '#root{padding-bottom:76px;}';
+      '#root{padding-bottom:52px;}';
     document.head.appendChild(style);
 
     var bar = document.createElement('div');
@@ -3770,6 +3777,195 @@ ReactDOM.createRoot(document.getElementById("root")).render(<AppShell />);
     document.addEventListener('DOMContentLoaded', buildBadge);
   } else {
     buildBadge();
+  }
+
+})();
+</script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  SUK BANGALORE — Push Notifications via Firebase FCM
+//  Asks permission once → saves token to Google Sheet
+//  Receives notifications even when app is closed
+// ══════════════════════════════════════════════════════════════
+(function() {
+  var cfg = APP_CONFIG.firebase;
+  if (!cfg) return;
+
+  // Initialize Firebase
+  if (!firebase.apps.length) {
+    firebase.initializeApp(cfg);
+  }
+  var messaging = firebase.messaging();
+
+  // ── Ask for notification permission ─────────────────────────
+  // Wait 5 seconds after page load so it doesn't feel aggressive
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      requestNotificationPermission();
+    }, 5000);
+  });
+
+  function requestNotificationPermission() {
+    // Don't ask again if already granted or denied
+    if (Notification.permission === 'granted') {
+      getAndSaveToken();
+      return;
+    }
+    if (Notification.permission === 'denied') return;
+
+    // Show a friendly in-app prompt first (better UX than native browser prompt)
+    showNotifPrompt();
+  }
+
+  function getAndSaveToken() {
+    messaging.getToken({ vapidKey: cfg.vapidKey })
+      .then(function(token) {
+        if (token) {
+          console.log('[SUK FCM] Token obtained');
+          saveTokenToSheet(token);
+        }
+      })
+      .catch(function(e) { console.log('[SUK FCM] Token error:', e); });
+  }
+
+  function saveTokenToSheet(token) {
+    // Save token to your Google Sheet via Apps Script
+    // Uses existing SCRIPT_URL from the app
+    if (typeof SCRIPT_URL === 'undefined' || !SCRIPT_URL) return;
+
+    // Check if already saved this session
+    if (sessionStorage.getItem('suk_fcm_saved') === token.substring(0, 20)) return;
+
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:  'saveToken',
+        apiKey:  typeof API_KEY !== 'undefined' ? API_KEY : '',
+        token:   token,
+        device:  navigator.userAgent.substring(0, 100)
+      })
+    }).then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.success) {
+          sessionStorage.setItem('suk_fcm_saved', token.substring(0, 20));
+          console.log('[SUK FCM] Token saved to sheet');
+        }
+      }).catch(function(){});
+  }
+
+  // Handle foreground notifications (when app is open)
+  messaging.onMessage(function(payload) {
+    console.log('[SUK FCM] Foreground message:', payload);
+    var title = (payload.notification && payload.notification.title) || 'SUK Bangalore';
+    var body  = (payload.notification && payload.notification.body)  || 'Jai Gurudev!';
+    showInAppNotif(title, body);
+  });
+
+  // ── Friendly in-app prompt before browser asks ───────────────
+  function showNotifPrompt() {
+    var anim = document.createElement('style');
+    anim.textContent = '@keyframes sukSlideDown{from{transform:translateY(-80px);opacity:0}to{transform:translateY(0);opacity:1}}';
+    document.head.appendChild(anim);
+
+    var bar = document.createElement('div');
+    bar.id = 'suk-notif-prompt';
+    bar.style.cssText =
+      'position:fixed;top:0;left:0;right:0;z-index:99997;' +
+      'background:linear-gradient(135deg,#0e2266,#1d4ed8);color:#fff;' +
+      'padding:14px 16px;display:flex;align-items:center;gap:12px;' +
+      'font-family:sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.25);' +
+      'animation:sukSlideDown 0.4s ease;';
+
+    var icon = document.createElement('span');
+    icon.style.cssText = 'font-size:26px;flex-shrink:0;';
+    icon.textContent = '🪷';
+
+    var txt = document.createElement('div');
+    txt.style.cssText = 'flex:1;min-width:0;';
+    var t1 = document.createElement('div');
+    t1.style.cssText = 'font-size:13px;font-weight:800;margin-bottom:2px;';
+    t1.textContent = 'Get Prayer & Satsang reminders';
+    var t2 = document.createElement('div');
+    t2.style.cssText = 'font-size:11px;opacity:0.8;line-height:1.4;';
+    t2.textContent = 'We'll notify you before your prayer and satsang events';
+    txt.appendChild(t1); txt.appendChild(t2);
+
+    // Allow button
+    var allowBtn = document.createElement('button');
+    allowBtn.textContent = 'Allow';
+    allowBtn.style.cssText =
+      'background:#fff;color:#1d4ed8;border:none;padding:8px 16px;' +
+      'border-radius:20px;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0;';
+    allowBtn.addEventListener('click', function() {
+      bar.remove();
+      Notification.requestPermission().then(function(permission) {
+        if (permission === 'granted') getAndSaveToken();
+      });
+    });
+
+    // No thanks button
+    var noBtn = document.createElement('button');
+    noBtn.textContent = '✕';
+    noBtn.style.cssText =
+      'background:none;border:none;color:rgba(255,255,255,0.6);' +
+      'font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;';
+    noBtn.addEventListener('click', function() { bar.remove(); });
+
+    bar.appendChild(icon);
+    bar.appendChild(txt);
+    bar.appendChild(allowBtn);
+    bar.appendChild(noBtn);
+    document.body.appendChild(bar);
+
+    // Auto-hide after 15 seconds
+    setTimeout(function() { if (bar.parentNode) bar.remove(); }, 15000);
+  }
+
+  // ── Show notification inside the app (foreground) ────────────
+  function showInAppNotif(title, body) {
+    var anim = document.createElement('style');
+    anim.textContent = '@keyframes sukSlideDown2{from{transform:translateY(-60px);opacity:0}to{transform:translateY(0);opacity:1}}';
+    document.head.appendChild(anim);
+
+    var notif = document.createElement('div');
+    notif.style.cssText =
+      'position:fixed;top:12px;left:12px;right:12px;z-index:99998;' +
+      'background:#fff;border-radius:16px;padding:14px 16px;' +
+      'box-shadow:0 8px 30px rgba(0,0,0,0.18);' +
+      'display:flex;align-items:flex-start;gap:12px;font-family:sans-serif;' +
+      'border-left:4px solid #1d4ed8;' +
+      'animation:sukSlideDown2 0.3s ease;';
+
+    var img = document.createElement('img');
+    img.src = APP_CONFIG.basePath + 'icons/icon-72.png';
+    img.style.cssText = 'width:36px;height:36px;border-radius:8px;flex-shrink:0;';
+
+    var txt = document.createElement('div');
+    txt.style.cssText = 'flex:1;min-width:0;';
+    var t1 = document.createElement('div');
+    t1.style.cssText = 'font-size:13px;font-weight:800;color:#1e3a8a;margin-bottom:3px;';
+    t1.textContent = title;
+    var t2 = document.createElement('div');
+    t2.style.cssText = 'font-size:12px;color:#374151;line-height:1.5;';
+    t2.textContent = body;
+    txt.appendChild(t1); txt.appendChild(t2);
+
+    var xBtn = document.createElement('button');
+    xBtn.textContent = '✕';
+    xBtn.style.cssText =
+      'background:none;border:none;color:#9ca3af;font-size:14px;cursor:pointer;flex-shrink:0;';
+    xBtn.addEventListener('click', function() { notif.remove(); });
+
+    notif.appendChild(img); notif.appendChild(txt); notif.appendChild(xBtn);
+    document.body.appendChild(notif);
+
+    // Auto-remove after 6 seconds
+    setTimeout(function() { if (notif.parentNode) notif.remove(); }, 6000);
   }
 
 })();
