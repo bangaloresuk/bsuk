@@ -693,7 +693,8 @@ const SUK_CONFIG = {
     shortName:    "Peenya 2nd Stage SUK",
     emoji:        "🪷",
     themeColor:   "#1d4ed8",
-    scriptUrl:    "https://jayguru-proxy.bangaloresuk.workers.dev",
+    scriptUrl:    "https://script.google.com/macros/s/AKfycby_v7lDp5kbvn4Jh3U6f9Sdwam0AY_6EV7KlI-tjBcVwDxFgS37108PmpPOF-G3lGFU/exec",
+    apiKey:       "1e267c88ee92686c6e78da0a1ba9eb26023410dc6e171241",
     configured:   true,
     features:     { satsangBooking:false, messages:false },
   },
@@ -766,7 +767,7 @@ function sukLabel(suk) {
 // ── Active SUK — set by welcome screen at runtime ────────────
 // Do NOT change these manually; they are set when user picks a SUK
 let SCRIPT_URL = "";
-//let API_KEY    = "";
+let API_KEY    = "";
 let ACTIVE_SUK = null;
 
 // ── Fixed prayer times — Bangalore Urban (satsang.org.in) ───
@@ -870,18 +871,18 @@ const SLOT_STYLE = {
 const SATSANG_SHEET = "Satsang";   // name of the sheet tab in your spreadsheet
 const satsangApi = {
   async getAll() {
-    const r = await fetch(`${SCRIPT_URL}?action=getAll&sheetName=${SATSANG_SHEET}`);
+    const r = await fetch(`${SCRIPT_URL}?action=getAll&apiKey=${API_KEY}&sheetName=${SATSANG_SHEET}`);
     return r.json();
   },
   async post(b) {
     const r = await fetch(SCRIPT_URL, {
-      method:"POST", body:JSON.stringify({...b, sheetName:SATSANG_SHEET})
+      method:"POST", body:JSON.stringify({...b, apiKey:API_KEY, sheetName:SATSANG_SHEET})
     });
     return r.json();
   },
   async delete(id) {
     const r = await fetch(SCRIPT_URL, {
-      method:"POST", body:JSON.stringify({ action:"delete", id, sheetName:SATSANG_SHEET })
+      method:"POST", body:JSON.stringify({ action:"delete", id, apiKey:API_KEY, sheetName:SATSANG_SHEET })
     });
     return r.json();
   }
@@ -892,28 +893,28 @@ const photoApi = {
   async upload(base64, filename, caption, uploader) {
     const r = await fetch(SCRIPT_URL, {
       method:"POST", body:JSON.stringify({
-        action:"uploadPhoto",
+        action:"uploadPhoto", apiKey:API_KEY,
         base64, filename, caption, uploader
       })
     });
     return r.json();
   },
   async getAll() {
-    const r = await fetch(`${SCRIPT_URL}?action=getPhotos`);
+    const r = await fetch(`${SCRIPT_URL}?action=getPhotos&apiKey=${API_KEY}`);
     return r.json();
   }
-}
+};
 
 // isConfigured is now computed inside App component (see below)
 
 const api = {
   async getAll() {
-    const r = await fetch(`${SCRIPT_URL}?action=getAll`);
+    const r = await fetch(`${SCRIPT_URL}?action=getAll&apiKey=${API_KEY}`);
     return r.json();
   },
   async post(b) {
     const r = await fetch(SCRIPT_URL, {
-      method:"POST", body:JSON.stringify(b)
+      method:"POST", body:JSON.stringify({...b, apiKey:API_KEY})
     });
     return r.json();
   }
@@ -4035,7 +4036,7 @@ function AppShell() {
     } else {
       // Go back to welcome screen
       SCRIPT_URL = "";
-      //API_KEY    = "";
+      API_KEY    = "";
       ACTIVE_SUK = null;
       try { sessionStorage.removeItem("activeSuk"); } catch(e) {}
       setSelectedSuk(null);
