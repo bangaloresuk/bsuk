@@ -1,0 +1,73 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Inject Worker URL
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          BANNERGHATTA_WORKER_URL: ${{ secrets.BANNERGHATTA_WORKER_URL }}
+          PEENYA_2ND_STAGE_WORKER_URL: ${{ secrets.PEENYA_2ND_STAGE_WORKER_URL }}
+          BANASHANKARI_WORKER_URL: ${{ secrets.BANASHANKARI_WORKER_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          if [ -z "${WORKER_URL}" ]; then
+            echo "WORKER_URL secret is not set" >&2
+            exit 1
+          fi
+          if [ -z "${BANNERGHATTA_WORKER_URL}" ]; then
+            echo "BANNERGHATTA_WORKER_URL secret is not set" >&2
+            exit 1
+          fi
+          if [ -z "${PEENYA_2ND_STAGE_WORKER_URL}" ]; then
+            echo "PEENYA_2ND_STAGE_WORKER_URL secret is not set" >&2
+            exit 1
+          fi
+          if [ -z "${BANASHANKARI_WORKER_URL}" ]; then
+            echo "BANASHANKARI_WORKER_URL secret is not set" >&2
+            exit 1
+          fi
+          if [ -z "${API_KEY}" ]; then
+            echo "API_KEY secret is not set" >&2
+            exit 1
+          fi
+          perl -0pi \
+            -e "s#__WORKER_URL__#${WORKER_URL}#g" \
+            -e "s#__bannerghatta_WORKER_URL__#${BANNERGHATTA_WORKER_URL}#g" \
+            -e "s#__peenya-2nd-stage_WORKER_URL__#${PEENYA_2ND_STAGE_WORKER_URL}#g" \
+            -e "s#__banashankari_WORKER_URL__#${BANASHANKARI_WORKER_URL}#g" \
+            -e "s#__apiKey__#${API_KEY}#g" \
+            index.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
