@@ -52,12 +52,23 @@ jobs:
             echo "API_KEY secret is not set" >&2
             exit 1
           fi
-          perl -0pi \
-            -e "s#__bannerghatta_WORKER_URL__#${BANNERGHATTA_WORKER_URL}#g" \
-            -e "s#__peenya-2nd-stage_WORKER_URL__#${PEENYA_2ND_STAGE_WORKER_URL}#g" \
-            -e "s#__banashankari_WORKER_URL__#${BANASHANKARI_WORKER_URL}#g" \
-            -e "s#__apiKey__#${API_KEY}#g" \
-            index.html
+          python - <<"PY"
+          import os
+          from pathlib import Path
+
+          replacements = {
+              "__bannerghatta_WORKER_URL__": os.environ["BANNERGHATTA_WORKER_URL"],
+              "__peenya-2nd-stage_WORKER_URL__": os.environ["PEENYA_2ND_STAGE_WORKER_URL"],
+              "__banashankari_WORKER_URL__": os.environ["BANASHANKARI_WORKER_URL"],
+              "__apiKey__": os.environ["API_KEY"],
+          }
+
+          path = Path("index.html")
+          content = path.read_text(encoding="utf-8")
+          for placeholder, value in replacements.items():
+              content = content.replace(placeholder, value)
+          path.write_text(content, encoding="utf-8")
+          PY
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
