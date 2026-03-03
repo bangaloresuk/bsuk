@@ -55,9 +55,9 @@ jobs:
           from pathlib import Path
 
           replacements = {
-              "__bannerghatta_WORKER_URL__": os.environ["BANNERGHATTA_WORKER_URL"],
-              "__peenya-2nd-stage_WORKER_URL__": os.environ["PEENYA_2ND_STAGE_WORKER_URL"],
-              "__banashankari_WORKER_URL__": os.environ["BANASHANKARI_WORKER_URL"],
+              "__BANNERGHATTA_WORKER_URL__": os.environ["BANNERGHATTA_WORKER_URL"],
+              "__PEENYA_2ND_STAGE_WORKER_URL__": os.environ["PEENYA_2ND_STAGE_WORKER_URL"],
+              "__BANASHANKARI_WORKER_URL__": os.environ["BANASHANKARI_WORKER_URL"],
               "__apiKey__": os.environ["API_KEY"],
           }
 
