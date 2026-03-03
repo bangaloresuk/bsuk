@@ -34,8 +34,6 @@ async function ensureToken(sukKey, workerUrl) {
   }
 }
 
-// These replace window.api / window.satsangApi / window.photoApi
-// with token-aware versions bound to the active SUK
 function buildApi(sukKey, workerUrl) {
   const base = `${workerUrl}/api/${sukKey}`;
 
@@ -61,17 +59,17 @@ function buildApi(sukKey, workerUrl) {
 
   return {
     prayer: {
-      getCalendar: (month, type)    => get("calendar", { month, type }),
-      book:        (body)           => post("book", body),
-      retrieve:    (mobile)         => post("retrieve", { mobile }),
+      getCalendar: (month, type)      => get("calendar", { month, type }),
+      book:        (body)             => post("book", body),
+      retrieve:    (mobile)           => post("retrieve", { mobile }),
       cancel:      (id, mobile, date) => post("cancel", { id, mobile, date }),
     },
     satsang: {
-      book:   (body)           => post("book", { ...body, sheetName: "Satsang" }),
-      cancel: (id, mobile, date) => post("cancel", { id, mobile, date, sheetName: "Satsang" }),
+      book:   (body)              => post("book", { ...body, sheetName: "Satsang" }),
+      cancel: (id, mobile, date)  => post("cancel", { id, mobile, date, sheetName: "Satsang" }),
     },
     photos: {
-      getAll: ()                           => get("photos"),
+      getAll: ()                              => get("photos"),
       upload: (base64, filename, caption, uploader) =>
         post("photo-upload", { base64, filename, caption, uploader }),
     },
@@ -79,7 +77,7 @@ function buildApi(sukKey, workerUrl) {
 }
 
 // ── Expose globally so feature modules can use them ──────────
-window._sukApi = null;  // set when SUK activates
+window._sukApi = null;
 
 // ── Shared UI atoms ──────────────────────────────────────────
 const BlueDivider = () =>
@@ -156,7 +154,6 @@ function SUKSearchDropdown({ selected, onSelect }) {
   const displayName = activeSuk ? (activeSuk.shortName || activeSuk.name) : "— Select Your Kendra —";
 
   return h("div", { ref: containerRef, style:{ position:"relative" }, onKeyDown: onKey, tabIndex: 0 },
-    // Trigger button
     h("div", {
       onClick: () => isOpen ? setIsOpen(false) : open(),
       className: "divine-input",
@@ -168,7 +165,6 @@ function SUKSearchDropdown({ selected, onSelect }) {
                           transform: isOpen ? "rotate(180deg)" : "rotate(0)" } }, "▾")
     ),
 
-    // Dropdown panel
     isOpen && h("div", {
       style:{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:200,
               background:"#fff", borderRadius:16, border:"1px solid rgba(59,130,246,0.2)",
@@ -234,7 +230,7 @@ function Welcome({ onEnter }) {
     if (!suk?.configured) return setError("This Kendra is coming soon. Please select another.");
     setLoading(true); setError("");
     try {
-      const workerUrl = suk.scriptUrl; // scriptUrl IS the worker URL in config.js
+      const workerUrl = suk.scriptUrl;
       await refreshToken(sel, workerUrl);
       onEnter(suk, workerUrl);
     } catch(e) {
@@ -288,13 +284,17 @@ function Main({ suk, api, onLogout }) {
     { id:"gallery",  icon:"📸", label:"Gallery", show: feat.photoGallery !== false },
   ].filter(t => t.show);
 
-  const [tab,      setTab]      = useState(TABS[0]?.id || "book");
-  const [bookMode, setBookMode] = useState("prayer");
-  const [calendar, setCalendar] = useState([]);
-  const [loading,  setLoading]  = useState(true);
+  const [tab,          setTab]          = useState(TABS[0]?.id || "book");
+  const [bookMode,     setBookMode]     = useState("prayer");
+  const [calendar,     setCalendar]     = useState([]);
+  const [calLoading,   setCalLoading]   = useState(true);
+
+  // ── FIX: Confirmation modals wired up ───────────────────────
+  const [prayerConfirm,  setPrayerConfirm]  = useState(null);
+  const [satsangConfirm, setSatsangConfirm] = useState(null);
 
   async function loadCal() {
-    setLoading(true);
+    setCalLoading(true);
     try {
       const now = new Date();
       const m1  = now.toISOString().slice(0,7);
@@ -304,14 +304,33 @@ function Main({ suk, api, onLogout }) {
         api.prayer.getCalendar(m2, "prayer"),
       ]);
       setCalendar([...(r1.data||[]), ...(r2.data||[])]);
-    } catch {}
-    setLoading(false);
+    } catch(e) {
+      console.warn("Calendar load failed:", e);
+      // FIX: Don't leave loading forever — still set calendar to empty
+      setCalendar([]);
+    } finally {
+      // FIX: Always clear loading regardless of success or failure
+      setCalLoading(false);
+    }
   }
 
   useEffect(() => { loadCal(); }, [suk.key]);
 
+  // ── FIX: onBooked now distinguishes prayer vs satsang ───────
+  function handlePrayerBooked(confirmation) {
+    if (confirmation) setPrayerConfirm(confirmation);
+    loadCal();
+  }
+
+  function handleSatsangBooked(confirmation) {
+    if (confirmation) setSatsangConfirm(confirmation);
+  }
+
   function content() {
-    if (loading && tab === "book") return h(window.DataLoadingOverlay || "div", {});
+    // FIX: Only show loading overlay on the book tab while calendar loads
+    if (calLoading && tab === "book") {
+      return h(window.DataLoadingOverlay || "div", {});
+    }
 
     switch(tab) {
       case "book": return h("div", { className:"fade-in" },
@@ -328,14 +347,24 @@ function Main({ suk, api, onLogout }) {
           )
         ),
         bookMode === "prayer" || feat.satsangBooking === false
-          ? h(window.PrayerBookingTab || "div", { sukKey: suk.key, api, calendar, onBooked: loadCal })
-          : h(window.SatsangBookingForm || "div", { sukKey: suk.key, api })
+          ? h(window.PrayerBookingTab || "div", {
+              sukKey: suk.key,
+              api,
+              calendar,
+              onBooked: handlePrayerBooked,
+              feat,
+            })
+          : h(window.SatsangBookingForm || "div", {
+              sukKey: suk.key,
+              api,
+              onBooked: handleSatsangBooked,
+            })
       );
       case "manage":   return h(window.RetrieveBookingTab || "div", { sukKey: suk.key, api });
-      case "all":      return h(window.AllBookingsView || "div", { sukKey: suk.key, api });
-      case "times":    return h(window.PrayerTimesTab || "div", {});
+      case "all":      return h(window.AllBookingsView    || "div", { sukKey: suk.key, api });
+      case "times":    return h(window.PrayerTimesTab     || "div", {});
       case "messages": return h(window.MessageComposerTab || "div", { suk });
-      case "gallery":  return h(window.PhotoGalleryTab || "div", { sukKey: suk.key, api });
+      case "gallery":  return h(window.PhotoGalleryTab    || "div", { sukKey: suk.key, api });
       default: return null;
     }
   }
@@ -343,7 +372,6 @@ function Main({ suk, api, onLogout }) {
   return h("div", { style:{ minHeight:"100vh", background:"#e8f0fe", overflowX:"hidden" } },
     h("div", { className:"divine-bg" }),
 
-    // Rotating mandalas (background decoration)
     h("svg", { className:"mandala", viewBox:"0 0 500 500", xmlns:"http://www.w3.org/2000/svg" },
       h("g", { fill:"none", stroke:"#1d4ed8", strokeWidth:"0.7", transform:"translate(250,250)" },
         h("circle",{r:"240"}),h("circle",{r:"210"}),h("circle",{r:"180"}),
@@ -355,7 +383,6 @@ function Main({ suk, api, onLogout }) {
     ),
 
     h("div", { className:"content" },
-      // Header
       h("div", { style:{ paddingTop:20, textAlign:"center", marginBottom:20, position:"relative" } },
         h("div", { style:{ fontSize:40, marginBottom:2, filter:"drop-shadow(0 0 20px rgba(255,180,0,.5))" } }, "🪷"),
         h("div", { className:"jayguru-title", style:{ fontSize:34 } }, "Jayguru"),
@@ -370,9 +397,7 @@ function Main({ suk, api, onLogout }) {
         }, "← Change")
       ),
 
-      // Main card
       h("div", { className:"card" },
-        // Tab bar
         h("div", { style:{ display:"flex", gap:3, marginBottom:20,
                             background:"rgba(240,246,255,.8)", padding:5, borderRadius:14,
                             overflowX:"auto" } },
@@ -395,7 +420,17 @@ function Main({ suk, api, onLogout }) {
                          color:"rgba(29,78,216,.3)", letterSpacing:2 } },
         "🪷 Jayguru · " + (suk.shortName || suk.name) + " · Bangalore"
       )
-    )
+    ),
+
+    // ── FIX: Confirmation modals now rendered ─────────────────
+    prayerConfirm && h(window.BookingConfirmModal, {
+      confirmation: prayerConfirm,
+      onClose: () => setPrayerConfirm(null),
+    }),
+    satsangConfirm && h(window.SatsangConfirmModal, {
+      confirmation: satsangConfirm,
+      onClose: () => setSatsangConfirm(null),
+    }),
   );
 }
 
@@ -428,7 +463,6 @@ function App() {
     try { sessionStorage.removeItem("activeSuk"); } catch {}
   }
 
-  // Restore session on page load
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("activeSuk");

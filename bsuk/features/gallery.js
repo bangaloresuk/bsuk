@@ -2,21 +2,43 @@
 //  features/gallery.js
 //  React component: PhotoGalleryTab
 //  Upload photos to Google Drive via Apps Script + view grid.
-//  Props: { photos, loading, onRefetch }
+//  Props: { api, sukKey }
+//  FIX: Now fetches its own photos instead of relying on
+//       undefined `photos`, `loading`, `onRefetch` variables.
 // ============================================================
 
 "use strict";
 
-const { createElement: h, useState } = React;
+const { createElement: h, useState, useEffect, useCallback } = React;
 
 window.PhotoGalleryTab = function PhotoGalleryTab({ api, sukKey }) {
-  const [upload,     setUpload]     = useState({ caption:"", uploader:"", file:null, preview:null });
-  const [uploading,  setUploading]  = useState(false);
-  const [msg,        setMsg]        = useState("");
+  const [upload,    setUpload]    = useState({ caption:"", uploader:"", file:null, preview:null });
+  const [uploading, setUploading] = useState(false);
+  const [msg,       setMsg]       = useState("");
+
+  // FIX: local state for photos instead of undefined outer vars
+  const [photos,  setPhotos]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [photoErr, setPhotoErr] = useState("");
+
+  // ── Fetch photos ──────────────────────────────────────────
+  const loadPhotos = useCallback(async () => {
+    setLoading(true);
+    setPhotoErr("");
+    try {
+      const res = await api.photos.getAll();
+      setPhotos(res.data || []);
+    } catch(e) {
+      setPhotoErr("Could not load photos.");
+    } finally {
+      setLoading(false);
+    }
+  }, [sukKey]);
+
+  useEffect(() => { loadPhotos(); }, [loadPhotos]);
 
   const handleUpload = async () => {
     if (!upload.file) { setMsg("⚠️ Please select a photo first."); return; }
-    if (!window.isConfigured()) { setMsg("⚠️ Script URL not configured."); return; }
 
     setUploading(true); setMsg("");
     const reader = new FileReader();
@@ -37,7 +59,7 @@ window.PhotoGalleryTab = function PhotoGalleryTab({ api, sukKey }) {
           })();
           setMsg("✅ Photo uploaded! Share the gallery with family 🙏\n" + galleryUrl);
           setUpload({ caption:"", uploader:"", file:null, preview:null });
-          onRefetch();
+          loadPhotos(); // FIX: use local refetch function
         } else { setMsg("⚠️ " + (res.message || "Upload failed")); }
       } catch(e) { setMsg("⚠️ Upload failed. Please try again."); }
       setUploading(false);
@@ -87,14 +109,14 @@ window.PhotoGalleryTab = function PhotoGalleryTab({ api, sukKey }) {
         fontWeight:700, marginBottom:14 } }, "📸 Upload a Photo"),
       h("div", { style:{ display:"flex", flexDirection:"column", gap:13 } },
 
-        // Photo picker
         h("div", null,
           h("label", { className:"divine-label" }, "Select Photo"),
           h("label", {
             style:{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
               gap:8, padding:"20px 16px", borderRadius:14,
               border:"2px dashed rgba(59,130,246,0.3)",
-              background:"rgba(239,246,255,0.5)", cursor:"pointer", textAlign:"center" },
+              background:"rgba(239,246,255,0.5)", cursor:"pointer", textAlign:"center",
+              position:"relative" },
           },
             upload.preview
               ? h("img", { src:upload.preview, alt:"preview",
@@ -140,57 +162,66 @@ window.PhotoGalleryTab = function PhotoGalleryTab({ api, sukKey }) {
 
         h("button", { onClick:handleUpload, disabled:uploading||!upload.file, className:"submit-btn" },
           uploading ? "⏳ Uploading..." : "🌸 Upload Photo"),
-
-        !window.isConfigured() && h("div", { style:{ fontSize:11, color:"rgba(217,119,6,0.7)", textAlign:"center" } },
-          "⚙️ Configure Script URL to enable uploads")
       )
     ),
 
     // Photo grid
     h("div", { className:"card" },
-      h("div", { style:{ fontFamily:"'Cinzel',serif", color:"#1e3a8a", fontSize:14,
-        fontWeight:700, marginBottom:14 } },
-        "🌸 Prayer Photo Gallery",
-        photos.length > 0 && h("span", { style:{ fontSize:11, color:"rgba(29,78,216,0.45)",
-          fontWeight:600, marginLeft:8 } }, `(${photos.length} photos)`)
+      h("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
+        h("div", { style:{ fontFamily:"'Cinzel',serif", color:"#1e3a8a", fontSize:14, fontWeight:700 } },
+          "🌸 Prayer Photo Gallery",
+          !loading && photos.length > 0 && h("span", { style:{ fontSize:11, color:"rgba(29,78,216,0.45)",
+            fontWeight:600, marginLeft:8 } }, `(${photos.length} photos)`)
+        ),
+        !loading && h("button", { onClick:loadPhotos,
+          style:{ background:"none", border:"1px solid rgba(59,130,246,0.2)", borderRadius:8,
+            padding:"4px 10px", fontSize:11, cursor:"pointer", color:"rgba(29,78,216,0.6)", fontWeight:600 } },
+          "↻ Refresh")
       ),
 
       loading
         ? h("div", { style:{ textAlign:"center", padding:"24px", color:"rgba(29,78,216,0.4)", fontSize:13 } },
             "⏳ Loading gallery...")
-        : photos.length === 0
-          ? h("div", { style:{ textAlign:"center", padding:"30px 0" } },
-              h("div", { style:{ fontSize:40, marginBottom:10, filter:"saturate(0) brightness(2.2)" } }, "🪷"),
-              h("div", { style:{ color:"rgba(29,78,216,0.35)", fontSize:13 } },
-                "No photos yet — be the first to share a sacred moment 🙏")
-            )
-          : h("div", { style:{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10 } },
-              photos.map((p, i) =>
-                h("div", { key:i, style:{ borderRadius:12, overflow:"hidden",
-                  border:"1px solid rgba(59,130,246,0.15)",
-                  background:"rgba(239,246,255,0.4)",
-                  display:"flex", flexDirection:"column" } },
-                  h("img", { src:p.url, alt:p.caption||"Prayer", loading:"lazy",
-                    style:{ width:"100%", aspectRatio:"1/1", objectFit:"cover", display:"block" } }),
-                  (p.caption||p.uploader||p.date) && h("div", { style:{ padding:"8px 10px 4px" } },
-                    p.caption && h("div", { style:{ fontSize:11, color:"#1e3a8a", fontWeight:600,
-                      lineHeight:1.4, marginBottom:2 } }, p.caption),
-                    p.uploader && h("div", { style:{ fontSize:10, color:"rgba(29,78,216,0.45)" } }, `🙏 ${p.uploader}`),
-                    p.date && h("div", { style:{ fontSize:10, color:"rgba(29,78,216,0.3)", marginTop:2 } },
-                      window.cleanPhotoDate(p.date))
-                  ),
-                  h("button", { onClick:()=>handlePhotoShare(p),
-                    style:{ marginTop:"auto", padding:"8px", border:"none",
-                      borderTop:"1px solid rgba(59,130,246,0.08)",
-                      background:"transparent", cursor:"pointer",
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      gap:5, fontSize:11, fontWeight:700, color:"rgba(29,78,216,0.55)" },
-                    onMouseEnter:e=>e.currentTarget.style.background="rgba(29,78,216,0.05)",
-                    onMouseLeave:e=>e.currentTarget.style.background="transparent",
-                  }, h("span", { style:{ fontSize:14 } }, "📤"), "Share")
+        : photoErr
+          ? h("div", { style:{ textAlign:"center", padding:"20px", color:"#b91c1c", fontSize:13 } },
+              h("div", null, "⚠️ " + photoErr),
+              h("button", { onClick:loadPhotos,
+                style:{ marginTop:10, padding:"7px 14px", border:"1px solid #fca5a5",
+                  borderRadius:8, background:"#fff", color:"#dc2626",
+                  fontWeight:700, fontSize:12, cursor:"pointer" } }, "Try Again"))
+          : photos.length === 0
+            ? h("div", { style:{ textAlign:"center", padding:"30px 0" } },
+                h("div", { style:{ fontSize:40, marginBottom:10, filter:"saturate(0) brightness(2.2)" } }, "🪷"),
+                h("div", { style:{ color:"rgba(29,78,216,0.35)", fontSize:13 } },
+                  "No photos yet — be the first to share a sacred moment 🙏")
+              )
+            : h("div", { style:{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10 } },
+                photos.map((p, i) =>
+                  h("div", { key:p.id||i, style:{ borderRadius:12, overflow:"hidden",
+                    border:"1px solid rgba(59,130,246,0.15)",
+                    background:"rgba(239,246,255,0.4)",
+                    display:"flex", flexDirection:"column" } },
+                    h("img", { src:p.url, alt:p.caption||"Prayer", loading:"lazy",
+                      style:{ width:"100%", aspectRatio:"1/1", objectFit:"cover", display:"block" } }),
+                    (p.caption||p.uploader||p.date) && h("div", { style:{ padding:"8px 10px 4px" } },
+                      p.caption && h("div", { style:{ fontSize:11, color:"#1e3a8a", fontWeight:600,
+                        lineHeight:1.4, marginBottom:2 } }, p.caption),
+                      p.uploader && h("div", { style:{ fontSize:10, color:"rgba(29,78,216,0.45)" } }, `🙏 ${p.uploader}`),
+                      p.date && h("div", { style:{ fontSize:10, color:"rgba(29,78,216,0.3)", marginTop:2 } },
+                        window.cleanPhotoDate(p.date))
+                    ),
+                    h("button", { onClick:()=>handlePhotoShare(p),
+                      style:{ marginTop:"auto", padding:"8px", border:"none",
+                        borderTop:"1px solid rgba(59,130,246,0.08)",
+                        background:"transparent", cursor:"pointer",
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        gap:5, fontSize:11, fontWeight:700, color:"rgba(29,78,216,0.55)" },
+                      onMouseEnter:e=>e.currentTarget.style.background="rgba(29,78,216,0.05)",
+                      onMouseLeave:e=>e.currentTarget.style.background="transparent",
+                    }, h("span", { style:{ fontSize:14 } }, "📤"), "Share")
+                  )
                 )
               )
-            )
     )
   );
 };

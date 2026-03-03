@@ -2,7 +2,8 @@
 //  features/booking.js
 //  React component: PrayerBookingTab
 //  Handles prayer slot booking + inline cancel section.
-//  Props: { bookings, satsangBookings, onBooked, feat }
+//  Props: { sukKey, api, calendar, onBooked, feat }
+//  FIX: Removed duplicate onClick argument on cancel satsang btn
 // ============================================================
 
 "use strict";
@@ -10,15 +11,15 @@
 const { createElement: h, useState, useCallback } = React;
 
 window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, feat }) {
-  const [form,         setForm]         = useState({ name:"", mobile:"", place:"", time:"", date:"" });
-  const [error,        setError]        = useState("");
-  const [shake,        setShake]        = useState(false);
-  const [submitting,   setSubmitting]   = useState(false);
-  const [showCancel,   setShowCancel]   = useState(false);
-  const [cancelMobile, setCancelMobile] = useState("");
-  const [cancelResults,setCancelResults]= useState(null);
-  const [cancelMsg,    setCancelMsg]    = useState("");
-  const [cancelling,   setCancelling]   = useState(null);
+  const [form,          setForm]          = useState({ name:"", mobile:"", place:"", time:"", date:"" });
+  const [error,         setError]         = useState("");
+  const [shake,         setShake]         = useState(false);
+  const [submitting,    setSubmitting]    = useState(false);
+  const [showCancel,    setShowCancel]    = useState(false);
+  const [cancelMobile,  setCancelMobile]  = useState("");
+  const [cancelResults, setCancelResults] = useState(null);
+  const [cancelMsg,     setCancelMsg]     = useState("");
+  const [cancelling,    setCancelling]    = useState(null);
 
   const triggerError = (msg) => {
     setError(msg); setShake(true);
@@ -26,7 +27,7 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
   };
 
   const isSlotTaken    = (date, time) => (calendar||[]).some(b => b.date === date && b.time === time && b.isBooked);
-  const getSlotBooking = (date, time) => (calendar||[]).find(b  => b.date === date && b.time === time && b.isBooked);
+  const getSlotBooking = (date, time) => (calendar||[]).find(b => b.date === date && b.time === time && b.isBooked);
   const prayerTimes    = window.getPrayerTimes(form.date);
 
   const handleSlotSelect = (time) => {
@@ -42,13 +43,13 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
   const handleBook = async () => {
     setError("");
     const { name, mobile, place, time, date } = form;
-    if (!name.trim())              { triggerError("⚠️ Please enter the person's name."); return; }
-    if (!mobile.trim())            { triggerError("⚠️ Please enter the mobile number."); return; }
-    if (!/^[0-9]{10}$/.test(mobile.trim())) { triggerError("⚠️ Please enter a valid 10-digit mobile number."); return; }
-    if (!place.trim())             { triggerError("⚠️ Please enter your location name."); return; }
-    if (!date)                     { triggerError("⚠️ Please select a date."); return; }
-    if (date < window.getTodayStr()) { triggerError("⚠️ You cannot book a past date. Please select today or a future date."); return; }
-    if (!time)                     { triggerError("⚠️ Please select Morning or Evening slot."); return; }
+    if (!name.trim())                         { triggerError("⚠️ Please enter the person's name."); return; }
+    if (!mobile.trim())                       { triggerError("⚠️ Please enter the mobile number."); return; }
+    if (!/^[0-9]{10}$/.test(mobile.trim()))   { triggerError("⚠️ Please enter a valid 10-digit mobile number."); return; }
+    if (!place.trim())                        { triggerError("⚠️ Please enter your location name."); return; }
+    if (!date)                                { triggerError("⚠️ Please select a date."); return; }
+    if (date < window.getTodayStr())          { triggerError("⚠️ You cannot book a past date. Please select today or a future date."); return; }
+    if (!time)                                { triggerError("⚠️ Please select Morning or Evening slot."); return; }
     if (isSlotTaken(date, time)) {
       const ex = getSlotBooking(date, time);
       triggerError(`🚫 "${time} Prayer" on ${window.formatDate(date)} is already booked by ${ex.name}.\n\nPlease choose a different date or slot.`);
@@ -62,6 +63,7 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
     try {
       const result = await api.prayer.book({ action:"add", name, mobile, place, day, time, date, prayerTime });
       if (result.success) {
+        // FIX: pass full confirmation object to onBooked so modal shows
         onBooked({ name, mobile, time, date, prayerTime, id: result.id, place });
         setForm({ name:"", mobile:"", place:"", time:"", date:"" });
       } else { triggerError(result.message); }
@@ -95,12 +97,13 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
       if (result.success) {
         setCancelMsg("✅ Booking cancelled successfully.");
         setCancelResults(prev => Array.isArray(prev) ? prev.filter(b => b.id !== id) : prev);
-        onBooked(null); // trigger parent refetch
+        onBooked(null);
       } else { setCancelMsg("❌ Could not cancel. Please try again."); }
     } catch(e) { setCancelMsg("❌ Network error."); }
     setCancelling(null);
   };
 
+  // FIX: removed the duplicate {onClick:...} object that was passed as 4th arg to h()
   const handleCancelSatsang = async (id, date) => {
     if (!window.confirm("Are you sure you want to cancel this Satsang booking?")) return;
     setCancelling(id);
@@ -274,7 +277,6 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
     renderDateChips(),
     renderSlots(),
 
-    // Prayer time info box
     form.date && prayerTimes && form.time && h("div", { className:"fade-in",
       style:{ background:"rgba(239,246,255,0.9)", border:"1px solid rgba(59,130,246,0.25)",
         borderRadius:14, padding:"14px 16px" } },
@@ -293,7 +295,6 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
       )
     ),
 
-    // Error
     error && h("div", {
       className: `fade-in${shake?" shake":""}`,
       style:{ padding:"14px 18px", borderRadius:12, fontSize:13, lineHeight:1.7,
@@ -306,7 +307,7 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
     ),
 
     // ── Inline Cancel ────────────────────────────────────
-    feat.cancelBooking && h("div", { style:{ marginTop:20 } },
+    feat && feat.cancelBooking !== false && h("div", { style:{ marginTop:20 } },
       h("button", {
         onClick: () => { setShowCancel(!showCancel); setCancelMsg(""); setCancelResults(null); setCancelMobile(""); },
         style:{ width:"100%", padding:"11px", border:"1px solid rgba(220,38,38,0.3)", borderRadius:11,
@@ -348,13 +349,15 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
                 h("div", { style:{ fontSize:12, color:"#d97706", fontWeight:700, marginTop:2 } },
                   `📅 ${window.formatDateWithDay(b.date)} · ⏰ ${b.time}`),
                 b.venue && h("div", { style:{ fontSize:11, color:"#6b7280", marginTop:2 } }, `📍 ${b.venue}`),
-                h("button", { disabled:cancelling===b.id, onClick:()=>handleCancelSatsang(b.id,b.date),
+                // FIX: removed duplicate onClick as 4th positional argument
+                h("button", {
+                  disabled: cancelling===b.id,
+                  onClick: () => handleCancelSatsang(b.id, b.date),
                   style:{ width:"100%", padding:"9px", border:"none", borderRadius:9, marginTop:10,
                     background:"linear-gradient(135deg,#92400e,#d97706)",
                     color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
-                    opacity:cancelling===b.id?0.6:1 } },
-                  cancelling===b.id?"⏳ Cancelling...":"🗑️  Cancel This Satsang",
-                  {onClick:()=>handleCancelSatsang(b.id,b.date)})
+                    opacity:cancelling===b.id?0.6:1 }
+                }, cancelling===b.id?"⏳ Cancelling...":"🗑️  Cancel This Satsang")
               );
             }
             const sc = window.SLOT_STYLE[b.time] || window.SLOT_STYLE["Morning"];
@@ -365,12 +368,14 @@ window.PrayerBookingTab = function PrayerBookingTab({ api, calendar, onBooked, f
                 `${sc.icon} ${b.time} Prayer · ${window.formatDateWithDay(b.date)}`),
               b.prayerTime && h("div", { style:{ fontSize:11, color:"#6b7280", marginTop:2 } },
                 `🕐 ${window.cleanTime(b.prayerTime)}`),
-              h("button", { disabled:cancelling===b.id, onClick:()=>handleCancelBooking(b.id,b.date),
+              h("button", {
+                disabled: cancelling===b.id,
+                onClick: () => handleCancelBooking(b.id, b.date),
                 style:{ width:"100%", padding:"9px", border:"none", borderRadius:9, marginTop:10,
                   background:"linear-gradient(135deg,#dc2626,#ef4444)",
                   color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
-                  opacity:cancelling===b.id?0.6:1 } },
-                cancelling===b.id?"⏳ Cancelling...":"🗑️  Cancel This Booking")
+                  opacity:cancelling===b.id?0.6:1 }
+              }, cancelling===b.id?"⏳ Cancelling...":"🗑️  Cancel This Booking")
             );
           })
         ),
