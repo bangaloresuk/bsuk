@@ -37,6 +37,44 @@ function getRandomQuote() {
   return QUOTES[idx]
 }
 
+// ── Animated "Loading…" with letter-by-letter glow wave ──────
+const LOADING_LABEL = "Loading your Kendra data"
+
+function AnimatedLoadingText() {
+  const letters = LOADING_LABEL.split('')
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex' }}>
+        {letters.map((ch, i) => (
+          <span key={i} style={{
+            fontFamily: "'Cinzel', serif",
+            fontSize: 11.5,
+            fontWeight: 700,
+            letterSpacing: ch === ' ' ? '4px' : '1.6px',
+            textTransform: 'uppercase',
+            display: 'inline-block',
+            animation: 'letterGlow 2.4s ease-in-out infinite',
+            animationDelay: (i * 0.07) + 's',
+          }}>{ch === ' ' ? '\u00A0' : ch}</span>
+        ))}
+      </div>
+      {/* Three animated dots */}
+      <div style={{ display: 'flex', gap: 2, marginLeft: 3, alignItems: 'flex-end', paddingBottom: 1 }}>
+        {[0,1,2].map(i => (
+          <span key={i} style={{
+            fontFamily: "'Cinzel', serif",
+            fontSize: 14,
+            fontWeight: 900,
+            animation: 'letterGlow 2.4s ease-in-out infinite',
+            animationDelay: (LOADING_LABEL.length * 0.07 + i * 0.2) + 's',
+            lineHeight: 1,
+          }}>.</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Full-page overlay with lotus spinner and a beautifully styled spiritual quote */
 export function DataLoadingOverlay() {
   const quote = React.useMemo(() => getRandomQuote(), [])
@@ -162,34 +200,42 @@ export function DataLoadingOverlay() {
 
         {/* Author */}
         <div style={{
-          fontSize: 10.5,
-          fontWeight: 700,
-          color: '#6366f1',
-          letterSpacing: '1.4px',
+          fontSize: 11,
+          fontWeight: 900,
+          color: '#3730a3',
+          letterSpacing: '1.6px',
           textTransform: 'uppercase',
-          opacity: 0.8,
+          fontFamily: "'Cinzel', serif",
         }}>
           {quote.author}
         </div>
 
       </div>
 
-      {/* Loading text */}
-      <div style={{
-        fontFamily: "'Cinzel', serif", fontSize: 11.5, fontWeight: 700,
-        color: 'rgba(30,58,138,0.5)', letterSpacing: '1.8px', textTransform: 'uppercase',
-      }}>
-        Loading your Kendra data…
-      </div>
+      {/* Animated divine loading text */}
+      <AnimatedLoadingText />
       <div style={{ fontSize: 13, color: 'rgba(30,58,138,0.35)', marginTop: 7, letterSpacing: '0.4px' }}>
         Jayguru 🙏
       </div>
 
-      {/* Shimmer keyframe */}
+      {/* All keyframes */}
       <style>{`
         @keyframes shimmer {
           0%   { left: -60%; }
           100% { left: 160%; }
+        }
+        @keyframes letterGlow {
+          0%, 100% { opacity: 0.35; color: rgba(30,58,138,0.45); }
+          50%       { opacity: 1;    color: #4338ca; text-shadow: 0 0 8px rgba(99,102,241,0.5); }
+        }
+        @keyframes omPulse {
+          0%, 100% { opacity: 0.2; transform: scale(1);    }
+          50%       { opacity: 0.7; transform: scale(1.18); }
+        }
+        @keyframes divineFade {
+          0%        { opacity: 0; transform: translateY(4px); }
+          15%, 85%  { opacity: 1; transform: translateY(0);   }
+          100%      { opacity: 0; transform: translateY(-4px);}
         }
       `}</style>
 
