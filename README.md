@@ -4,6 +4,7 @@ Prayer slot & Satsang booking app for Satsang Upayojana Kendras (SUKs), Bangalor
 
 **Stack:** React 18 + Vite · **Backend:** Google Apps Script + Google Sheets · **Deploy:** GitHub Pages / Netlify / Vercel
 
+
 ---
 
 ## Project Structure
