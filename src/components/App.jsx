@@ -45,7 +45,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
   const isConfigured = !!(state.ACTIVE_SUK && state.ACTIVE_SUK.configured &&
     state.SCRIPT_URL && state.SCRIPT_URL !== "" && !state.SCRIPT_URL.startsWith("YOUR_"));
   const [bookings,   setBookings]   = React.useState([]);
-  const [form,       setForm]       = React.useState({ name:"", mobile:"", place:"", time:"", date:"" });
+  const [form,       setForm]       = React.useState({ name:"", mobile:"", place:"", time:"", date:"", mapsLink:"" });
 
   const [error,      setError]      = React.useState("");
   const [shake,      setShake]      = React.useState(false);
@@ -154,6 +154,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
       "━━━━━━━━━━━━━━━━━━━━",
       `🕐 *Prayer Time:* ${cleanTime(c.prayerTime)} sharp`,
       `📍 *Address:* ${locationLine}`,
+      ...(c.mapsLink ? [`📌 *Google Maps:* ${c.mapsLink}`] : []),
       "━━━━━━━━━━━━━━━━━━━━",
       "",
       "*With love & Jayguru,*",
@@ -538,6 +539,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
 
   const handlePhotoUpload = async () => {
     if (!photoUpload.file) { setPhotoMsg("⚠️ Please select a photo first."); return; }
+    if (!photoUpload.uploader.trim()) { setPhotoMsg("⚠️ Please enter your name before uploading."); return; }
     if (!isConfigured)     { setPhotoMsg("⚠️ Script URL not configured."); return; }
     setPhotoUploading(true); setPhotoMsg("");
     try {
@@ -606,14 +608,15 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     const day        = getDayName(date);
     const pt         = getPrayerTimes(date);
     const prayerTime = pt ? pt[time] : "";
+    const mapsLink   = form.mapsLink || "";
 
     setSubmitting(true);
     try {
-      const result = await api.post({ action:"add", name, mobile, place, day, time, date, prayerTime });
+      const result = await api.post({ action:"add", name, mobile, place, mapsLink, day, time, date, prayerTime });
       if (result.success) {
         // Show beautiful confirmation modal
-        setConfirmation({ name, mobile, time, date, prayerTime, id: result.id, place });
-        setForm({ name:"", mobile:"", place:"", time:"", date:"" });
+        setConfirmation({ name, mobile, time, date, prayerTime, id: result.id, place, mapsLink });
+        setForm({ name:"", mobile:"", place:"", time:"", date:"", mapsLink:"" });
         fetchBookings();
       } else { triggerError(result.message); }
     } catch(e) { triggerError("⚠️ Network error. Please try again."); }
@@ -861,7 +864,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
         }}>
           {/* Drawer header */}
           <div style={{
-            padding:"28px 20px 18px",
+            padding:"28px 20px 20px",
             background:"linear-gradient(135deg,rgba(29,78,216,0.07),rgba(59,130,246,0.05))",
             borderBottom:"1px solid rgba(59,130,246,0.15)",
             position:"relative",
@@ -873,15 +876,21 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
               fontSize:16, color:"#1e3a8a", display:"flex",
               alignItems:"center", justifyContent:"center", fontWeight:900,
             }}>✕</button>
-            <div style={{ fontSize:26, marginBottom:6 }}>🪷</div>
-            <div style={{ fontFamily:"'Cinzel',serif", color:"#1e3a8a", fontSize:14, fontWeight:800, letterSpacing:1 }}>
-              More Options
+
+            {/* 🪷 All Options 🙏 — one line */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:currentUser ? 10 : 0 }}>
+              <span style={{ fontSize:24 }}>🪷</span>
+              <div style={{ fontFamily:"'Cinzel',serif", color:"#1e3a8a", fontSize:15, fontWeight:800,
+                letterSpacing:1.5, textTransform:"uppercase" }}>
+                All Options
+              </div>
+              <span style={{ fontSize:24 }}>🙏</span>
             </div>
             {currentUser && (
               <div style={{
-                marginTop:8, padding:"8px 10px", borderRadius:10,
+                marginTop:10, padding:"8px 10px", borderRadius:10,
                 background:"rgba(29,78,216,0.07)", border:"1px solid rgba(59,130,246,0.15)",
-                fontSize:12, color:"#1e3a8a", fontWeight:600,
+                fontSize:12, color:"#1e3a8a", fontWeight:600, textAlign:"center",
               }}>
                 👤 {currentUser.name} · {currentUser.email || currentUser.mobile}
               </div>
@@ -889,7 +898,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           </div>
 
           {/* Drawer menu items */}
-          <div style={{ flex:1, padding:"12px 12px" }}>
+          <div style={{ flex:1, padding:"14px 12px" }}>
             {manageTabs.map((t, i) => (
               <button key={t.id}
                 onClick={() => {
@@ -898,31 +907,37 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   setDrawerOpen(false);
                 }}
                 style={{
-                  display:"flex", alignItems:"center", gap:12, width:"100%",
-                  padding:"13px 14px", border:"none", borderRadius:12, cursor:"pointer",
-                  background:"transparent", textAlign:"left", transition:"all 0.18s",
-                  marginBottom:4,
+                  display:"flex", alignItems:"center", gap:14, width:"100%",
+                  padding:"12px 14px", border:"none", borderRadius:14, cursor:"pointer",
+                  background:"rgba(255,255,255,0.55)", textAlign:"left",
+                  transition:"all 0.18s", marginBottom:8,
+                  boxShadow:"0 1px 4px rgba(29,78,216,0.07)",
+                  borderLeft:"3px solid rgba(59,130,246,0.18)",
                 }}
-                onMouseEnter={e => e.currentTarget.style.background="rgba(29,78,216,0.07)"}
-                onMouseLeave={e => e.currentTarget.style.background="transparent"}
+                onMouseEnter={e => { e.currentTarget.style.background="rgba(29,78,216,0.08)"; e.currentTarget.style.borderLeftColor="#1d4ed8"; }}
+                onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.55)"; e.currentTarget.style.borderLeftColor="rgba(59,130,246,0.18)"; }}
               >
+                {/* Icon box */}
                 <div style={{
-                  width:40, height:40, borderRadius:10, flexShrink:0,
+                  width:42, height:42, borderRadius:12, flexShrink:0,
                   background:"linear-gradient(135deg,rgba(29,78,216,0.1),rgba(59,130,246,0.07))",
-                  border:"1px solid rgba(59,130,246,0.18)",
-                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
+                  border:"1px solid rgba(59,130,246,0.2)",
+                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:20,
                 }}>
                   {t.icon}
                 </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700, color:"#1e3a8a", fontSize:13 }}>
-                    {t.label.split(" ").slice(1).join(" ")}
+                {/* Text */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, color:"#1e3a8a", fontSize:13, lineHeight:1.3,
+                    fontFamily:"'Cinzel',serif", letterSpacing:"0.3px" }}>
+                    {t.label.replace(/^[^\s]+\s/, "")}
                   </div>
-                  <div style={{ fontSize:11, color:"rgba(29,78,216,0.45)", marginTop:2, lineHeight:1.4 }}>
+                  <div style={{ fontSize:11, color:"rgba(29,78,216,0.45)", marginTop:3, lineHeight:1.4 }}>
                     {t.desc}
                   </div>
                 </div>
-                <div style={{ color:"rgba(29,78,216,0.3)", fontSize:16 }}>›</div>
+                {/* Arrow */}
+                <div style={{ color:"rgba(29,78,216,0.35)", fontSize:18, flexShrink:0, fontWeight:300 }}>›</div>
               </button>
             ))}
           </div>
@@ -1049,27 +1064,39 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
             gap:8, marginTop:10, flexWrap:"wrap" }}>
             {bookings.length > 0 && (
-              <div style={{ display:"inline-flex", alignItems:"center", gap:5,
-                padding:"5px 12px", borderRadius:20,
-                background:"rgba(29,78,216,0.07)",
-                border:"1px solid rgba(29,78,216,0.14)" }}>
+              <div
+                onClick={() => { setActiveTab("manage"); setManageTab("all"); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:5,
+                  padding:"5px 12px", borderRadius:20,
+                  background:"rgba(29,78,216,0.07)",
+                  border:"1px solid rgba(29,78,216,0.14)",
+                  cursor:"pointer", transition:"background 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.background="rgba(29,78,216,0.15)"}
+                onMouseLeave={e => e.currentTarget.style.background="rgba(29,78,216,0.07)"}>
                 <span style={{ fontSize:12 }}>🌅</span>
                 <span style={{ fontSize:11, color:"rgba(29,78,216,0.6)", fontWeight:700,
                   fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
                   {bookings.length} Prayer{bookings.length!==1?"s":""}
                 </span>
+                <span style={{ fontSize:9, color:"rgba(29,78,216,0.4)", marginLeft:2 }}>›</span>
               </div>
             )}
             {feat.satsangBooking && satsangBookings.length > 0 && (
-              <div style={{ display:"inline-flex", alignItems:"center", gap:5,
-                padding:"5px 12px", borderRadius:20,
-                background:"rgba(217,119,6,0.07)",
-                border:"1px solid rgba(217,119,6,0.18)" }}>
+              <div
+                onClick={() => { setActiveTab("manage"); setManageTab("all"); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:5,
+                  padding:"5px 12px", borderRadius:20,
+                  background:"rgba(217,119,6,0.07)",
+                  border:"1px solid rgba(217,119,6,0.18)",
+                  cursor:"pointer", transition:"background 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.background="rgba(217,119,6,0.18)"}
+                onMouseLeave={e => e.currentTarget.style.background="rgba(217,119,6,0.07)"}>
                 <span style={{ fontSize:12 }}>🪔</span>
                 <span style={{ fontSize:11, color:"rgba(120,53,15,0.65)", fontWeight:700,
                   fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
                   {satsangBookings.length} Satsang{satsangBookings.length!==1?"s":""}
                 </span>
+                <span style={{ fontSize:9, color:"rgba(120,53,15,0.4)", marginLeft:2 }}>›</span>
               </div>
             )}
           </div>
@@ -1203,25 +1230,28 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
 
               <div>
                 <label className="divine-label">📍 Location</label>
-                <div style={{ position:"relative" }}>
-                  <input className="divine-input"
-                    placeholder="Type location name  OR  paste Google Maps link"
-                    value={form.place}
-                    onChange={e => {
-                      const v = e.target.value;
-                      setError("");
-                      const isLink = v.startsWith("http") || v.includes("maps.google") || v.includes("goo.gl") || v.includes("maps.app");
-                      setForm({...form, place:v, mapsLink: isLink ? v : form.mapsLink});
-                    }}/>
-                  {(form.place.startsWith("http") || form.place.includes("maps.google") || form.place.includes("goo.gl") || form.place.includes("maps.app")) && (
-                    <a href={form.place} target="_blank" rel="noopener noreferrer"
-                      style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
-                        background:"#1d4ed8", color:"#fff", borderRadius:6, padding:"3px 8px",
-                        fontSize:11, fontWeight:700, textDecoration:"none", whiteSpace:"nowrap" }}>
-                      Open Map ↗
-                    </a>
-                  )}
-                </div>
+                <input className="divine-input"
+                  placeholder="Type location name  OR  paste Google Maps link"
+                  value={form.place}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setError("");
+                    const isLink = v.startsWith("http") || v.includes("maps.google") || v.includes("goo.gl") || v.includes("maps.app");
+                    setForm({...form, place:v, mapsLink: isLink ? v : form.mapsLink});
+                  }}/>
+              </div>
+
+              <div>
+                <label className="divine-label" style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:11, color:"rgba(29,78,216,0.5)" }}>✦</span>
+                  <span style={{ fontSize:10, fontWeight:700, letterSpacing:"1.2px", color:"rgba(29,78,216,0.55)" }}>
+                    🚀 GOOGLE MAPS LINK (OPTIONAL)
+                  </span>
+                </label>
+                <input className="divine-input"
+                  placeholder="Paste Google Maps link"
+                  value={form.mapsLink || ""}
+                  onChange={e => { setError(""); setForm({...form, mapsLink: e.target.value}); }}/>
               </div>
 
               <div>
@@ -1571,7 +1601,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                       if (!/^[0-9]{10}$/.test(form.mobile.trim())) { triggerError("⚠️ Please enter a valid 10-digit mobile number."); return; }
                       if (!form.date)          { triggerError("⚠️ Please select a date.");             return; }
                       alert(`✅ Registration received!\n\n${t.icon} ${t.label}\n👤 ${form.name}\n📅 ${form.date}\n\nOur team will contact you shortly. Jayguru 🙏`);
-                      setForm({ name:"", mobile:"", place:"", time:"", date:"" });
+                      setForm({ name:"", mobile:"", place:"", time:"", date:"", mapsLink:"" });
                     }}
                   >
                     {t.icon}  Register for {t.label}
@@ -1781,8 +1811,13 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   /* ── PRAYER CARD ── */
                   if (!isSatsang) {
                     const sc = SLOT_STYLE[b.time] || SLOT_STYLE["Morning"];
+                    // Extract mapsLink from place if it was stored combined (e.g. "Address https://maps...")
+                    const placeStr = b.place || "";
+                    const urlMatch = placeStr.match(/(https?:\/\/[^\s]+)/);
+                    const extractedMapsLink = urlMatch ? urlMatch[1] : "";
+                    const cleanPlace = extractedMapsLink ? placeStr.replace(extractedMapsLink, "").trim() : placeStr;
                     const shareConf = { name:b.name, mobile:b.mobile, time:b.time,
-                      date:b.date, prayerTime:cleanTime(b.prayerTime), place:b.place, id:b.id };
+                      date:b.date, prayerTime:cleanTime(b.prayerTime), place:cleanPlace || placeStr, mapsLink:extractedMapsLink, id:b.id };
                     return (
                       <div key={b.id} style={{ border:"1.5px solid rgba(59,130,246,0.2)",
                         borderRadius:16, overflow:"hidden",

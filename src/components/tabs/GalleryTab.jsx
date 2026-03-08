@@ -322,8 +322,8 @@ export default function GalleryTab({
           </div>
 
           <div>
-            <label className="divine-label">Your Name (optional)</label>
-            <input className="divine-input" placeholder="e.g. Bannerghatta SUK"
+            <label className="divine-label">Your Name <span style={{ color:'#dc2626', fontSize:13 }}>*</span></label>
+            <input className="divine-input" placeholder="Enter your name (required)"
               value={photoUpload.uploader}
               onChange={e => setPhotoUpload(p => ({ ...p, uploader: e.target.value }))} />
           </div>
@@ -336,7 +336,7 @@ export default function GalleryTab({
             }}>{photoMsg}</div>
           )}
 
-          <button onClick={onUpload} disabled={photoUploading || !photoUpload.file} className="submit-btn">
+          <button onClick={onUpload} disabled={photoUploading || !photoUpload.file || !photoUpload.uploader.trim()} className="submit-btn">
             {photoUploading ? '⏳ Uploading...' : '🌸 Upload Photo'}
           </button>
 

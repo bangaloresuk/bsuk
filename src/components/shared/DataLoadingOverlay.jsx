@@ -26,6 +26,16 @@ const QUOTES = [
     text: "The Idle are rickety abortions of ill-fated nature.",
     author: "Shree Shree Thakur Anukulchandra",
   },
+  {
+    heading: "BE HUMBLE",
+    text: "Be humble but not weak,-- brcause the weak break to bend !",
+    author: "Shree Shree Thakur Anukulchandra",
+  },
+  {
+    heading: "A MAN OF IGNORANCE",
+    text: "A man of little faith is surely a man of ignorance !",
+    author: "Shree Shree Thakur Anukulchandra",
+  },
 ]
 
 let _lastIndex = -1
