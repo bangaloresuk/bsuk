@@ -1,7 +1,7 @@
 import React from 'react'
 import { SUK_CONFIG, sukLabel } from '../../config/sukConfig.js'
 
-function SUKSearchDropdown({ selected, onSelect }) {
+function SUKSearchDropdown({ selected, onSelect, compact = false }) {
   const allSuks = React.useMemo(() => Object.values(SUK_CONFIG), []);
   const [isOpen,      setIsOpen]      = React.useState(false);
   const [search,      setSearch]      = React.useState("");
@@ -91,28 +91,32 @@ function SUKSearchDropdown({ selected, onSelect }) {
   const liveLabel = activeSuk ? (activeSuk.shortName||activeSuk.name).replace(" SUK","").trim() : "";
 
   return (
-    <div ref={containerRef} style={{ position:"relative", width:"100%" }}>
+    <div ref={containerRef} style={{ position:"relative", width: compact ? "auto" : "100%" }}>
 
       {/* ── Trigger button ── */}
       <button
         onClick={() => setIsOpen(o => !o)}
         style={{
-          width:"100%", padding:"14px 16px",
-          borderRadius: isOpen ? "13px 13px 0 0" : 13,
+          width: compact ? "auto" : "100%",
+          padding: compact ? "7px 10px 7px 10px" : "14px 16px",
+          borderRadius: compact ? 10 : (isOpen ? "13px 13px 0 0" : 13),
           border:`1.5px solid ${isOpen ? "rgba(29,78,216,0.45)" : "rgba(59,130,246,0.22)"}`,
           background: isOpen
             ? "rgba(239,246,255,0.95)"
-            : selected ? "rgba(239,246,255,0.8)" : "rgba(239,246,255,0.6)",
-          display:"flex", alignItems:"center", justifyContent:"space-between", gap:10,
+            : selected ? "rgba(239,246,255,0.9)" : "rgba(239,246,255,0.7)",
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap: compact ? 5 : 10,
           cursor:"pointer", transition:"all 0.2s",
           boxShadow: isOpen
             ? "0 -2px 16px rgba(29,78,216,0.08)"
             : "0 2px 8px rgba(29,78,216,0.07)",
+          backdropFilter:"blur(8px)",
+          maxWidth: compact ? 160 : "none",
+          whiteSpace:"nowrap",
         }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, overflow:"hidden" }}>
+        <div style={{ display:"flex", alignItems:"center", gap: compact ? 5 : 10, overflow:"hidden" }}>
           {/* Lotus indicator */}
           <span style={{
-            fontSize:14, flexShrink:0,
+            fontSize: compact ? 12 : 14, flexShrink:0,
             filter: selected && activeSuk && activeSuk.configured
               ? "drop-shadow(0 0 5px rgba(255,150,180,0.8))"
               : "saturate(0) brightness(1.5) opacity(0.4)",
@@ -120,11 +124,12 @@ function SUKSearchDropdown({ selected, onSelect }) {
           }}>🪷</span>
           <span style={{
             fontFamily:"'Cinzel',serif", fontWeight:700,
-            fontSize:13, letterSpacing:"0.3px",
+            fontSize: compact ? 11 : 13, letterSpacing:"0.3px",
             color: selected ? "#1e3a8a" : "rgba(29,78,216,0.38)",
             overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis",
+            maxWidth: compact ? 90 : "none",
           }}>
-            {selected ? liveLabel : "— Choose a Kendra —"}
+            {selected ? liveLabel : (compact ? "Switch" : "— Choose a Kendra —")}
           </span>
         </div>
         <div style={{
@@ -137,11 +142,15 @@ function SUKSearchDropdown({ selected, onSelect }) {
       {/* ── Dropdown panel ── */}
       {isOpen && (
         <div style={{
-          position:"absolute", top:"100%", left:0, right:0, zIndex:200,
+          position:"absolute", top: compact ? "calc(100% + 4px)" : "100%",
+          left: compact ? "auto" : 0,
+          right: compact ? 0 : "auto",
+          width: compact ? 260 : "auto",
+          zIndex:200,
           background:"rgba(248,252,255,0.98)",
           border:"1.5px solid rgba(29,78,216,0.2)",
-          borderTop:"none",
-          borderRadius:"0 0 16px 16px",
+          borderTop: compact ? "1.5px solid rgba(29,78,216,0.2)" : "none",
+          borderRadius: compact ? 14 : "0 0 16px 16px",
           boxShadow:"0 18px 48px rgba(29,78,216,0.16), 0 4px 12px rgba(0,0,0,0.06)",
           backdropFilter:"blur(16px)",
           animation:"dropDown 0.18s ease",

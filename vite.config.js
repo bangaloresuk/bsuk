@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/bsuk/', // so it works when deployed in any subfolder
+  base: '/bangaloresuk/', // so it works when deployed in any subfolder
 })

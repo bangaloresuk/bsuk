@@ -34,7 +34,7 @@ import { DataLoadingOverlay } from './shared/DataLoadingOverlay.jsx'
 import PrayerTimesTab from './tabs/PrayerTimesTab.jsx'
 import GalleryTab     from './tabs/GalleryTab.jsx'
 
-function App({ onChangeSuk, deepLink = {} }) {
+function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequestSignIn }) {
   // Merge DEFAULT_FEATURES with this SUK's overrides
   const feat = React.useMemo(() => ({
     ...DEFAULT_FEATURES,
@@ -620,9 +620,11 @@ function App({ onChangeSuk, deepLink = {} }) {
     setSubmitting(false);
   };
 
+  // ── Hamburger / drawer state ──────────────────────────────
+  const [drawerOpen, setDrawerOpen] = React.useState(false)
+
   const tabs = [
-    { id:"book",   label:"🙏 Book" },
-    { id:"manage", label:"📋 More Options" },
+    { id:"book", label:"🙏 Book" },
   ];
   // Only show manage sub-tabs that are enabled for this SUK
   const manageTabs = [
@@ -832,8 +834,167 @@ function App({ onChangeSuk, deepLink = {} }) {
         </div>
       )}
 
+      {/* ── HAMBURGER DRAWER OVERLAY ── */}
+      {drawerOpen && (
+        <div
+          onClick={() => setDrawerOpen(false)}
+          style={{
+            position:"fixed", inset:0, zIndex:3000,
+            background:"rgba(0,0,0,0.35)", backdropFilter:"blur(2px)",
+          }}
+        />
+      )}
+
+      {/* ── HAMBURGER DRAWER ── */}
+      <div style={{
+        position:"fixed", top:0, left:0, bottom:0, zIndex:3001,
+        width: drawerOpen ? 290 : 0,
+        overflow:"hidden",
+        transition:"width 0.28s cubic-bezier(0.4,0,0.2,1)",
+        boxShadow: drawerOpen ? "8px 0 40px rgba(29,78,216,0.18)" : "none",
+      }}>
+        <div style={{
+          width:290, height:"100%",
+          background:"linear-gradient(160deg,#f0f6ff 0%,#e8f0fe 60%,#dce9ff 100%)",
+          display:"flex", flexDirection:"column",
+          overflowY:"auto",
+        }}>
+          {/* Drawer header */}
+          <div style={{
+            padding:"28px 20px 18px",
+            background:"linear-gradient(135deg,rgba(29,78,216,0.07),rgba(59,130,246,0.05))",
+            borderBottom:"1px solid rgba(59,130,246,0.15)",
+            position:"relative",
+          }}>
+            <button onClick={() => setDrawerOpen(false)} style={{
+              position:"absolute", top:16, right:16,
+              width:32, height:32, borderRadius:"50%", border:"none",
+              background:"rgba(29,78,216,0.1)", cursor:"pointer",
+              fontSize:16, color:"#1e3a8a", display:"flex",
+              alignItems:"center", justifyContent:"center", fontWeight:900,
+            }}>✕</button>
+            <div style={{ fontSize:26, marginBottom:6 }}>🪷</div>
+            <div style={{ fontFamily:"'Cinzel',serif", color:"#1e3a8a", fontSize:14, fontWeight:800, letterSpacing:1 }}>
+              More Options
+            </div>
+            {currentUser && (
+              <div style={{
+                marginTop:8, padding:"8px 10px", borderRadius:10,
+                background:"rgba(29,78,216,0.07)", border:"1px solid rgba(59,130,246,0.15)",
+                fontSize:12, color:"#1e3a8a", fontWeight:600,
+              }}>
+                👤 {currentUser.name} · {currentUser.email || currentUser.mobile}
+              </div>
+            )}
+          </div>
+
+          {/* Drawer menu items */}
+          <div style={{ flex:1, padding:"12px 12px" }}>
+            {manageTabs.map((t, i) => (
+              <button key={t.id}
+                onClick={() => {
+                  setActiveTab("manage");
+                  setManageTab(t.id);
+                  setDrawerOpen(false);
+                }}
+                style={{
+                  display:"flex", alignItems:"center", gap:12, width:"100%",
+                  padding:"13px 14px", border:"none", borderRadius:12, cursor:"pointer",
+                  background:"transparent", textAlign:"left", transition:"all 0.18s",
+                  marginBottom:4,
+                }}
+                onMouseEnter={e => e.currentTarget.style.background="rgba(29,78,216,0.07)"}
+                onMouseLeave={e => e.currentTarget.style.background="transparent"}
+              >
+                <div style={{
+                  width:40, height:40, borderRadius:10, flexShrink:0,
+                  background:"linear-gradient(135deg,rgba(29,78,216,0.1),rgba(59,130,246,0.07))",
+                  border:"1px solid rgba(59,130,246,0.18)",
+                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
+                }}>
+                  {t.icon}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, color:"#1e3a8a", fontSize:13 }}>
+                    {t.label.split(" ").slice(1).join(" ")}
+                  </div>
+                  <div style={{ fontSize:11, color:"rgba(29,78,216,0.45)", marginTop:2, lineHeight:1.4 }}>
+                    {t.desc}
+                  </div>
+                </div>
+                <div style={{ color:"rgba(29,78,216,0.3)", fontSize:16 }}>›</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Admin Sign In / Sign Out */}
+          <div style={{ padding:"16px 12px", borderTop:"1px solid rgba(59,130,246,0.12)" }}>
+            {currentUser ? (
+              <button onClick={() => { setDrawerOpen(false); onSignOut && onSignOut(); }} style={{
+                width:"100%", padding:"12px", border:"1px solid rgba(220,38,38,0.25)",
+                borderRadius:11, background:"rgba(254,242,242,0.7)", cursor:"pointer",
+                color:"#b91c1c", fontWeight:700, fontSize:13,
+                display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+              }}>
+                🚪 Sign Out
+              </button>
+            ) : (
+              <button onClick={() => { setDrawerOpen(false); onRequestSignIn && onRequestSignIn(); }} style={{
+                width:"100%", padding:"12px", border:"1px solid rgba(29,78,216,0.25)",
+                borderRadius:11, background:"rgba(239,246,255,0.8)", cursor:"pointer",
+                color:"#1d4ed8", fontWeight:700, fontSize:13,
+                display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+              }}>
+                🔐 Admin Sign In
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ── HEADER ── */}
       <div style={{ textAlign:"center", padding:"48px 0 30px", position:"relative" }}>
+        {/* ── Hamburger button — top LEFT of header ── */}
+        <button
+          onClick={() => setDrawerOpen(true)}
+          style={{
+            position:"absolute", top:14, left:14, zIndex:10,
+            width:42, height:42, borderRadius:12, border:"1.5px solid rgba(59,130,246,0.22)",
+            background:"rgba(255,255,255,0.85)", backdropFilter:"blur(8px)",
+            cursor:"pointer", display:"flex", flexDirection:"column",
+            alignItems:"center", justifyContent:"center", gap:5,
+            boxShadow:"0 3px 12px rgba(29,78,216,0.12)",
+            transition:"all 0.2s",
+          }}
+          title="More options"
+        >
+          <div style={{ width:18, height:2, borderRadius:2, background:"#1e3a8a" }}/>
+          <div style={{ width:14, height:2, borderRadius:2, background:"#3b82f6" }}/>
+          <div style={{ width:18, height:2, borderRadius:2, background:"#1e3a8a" }}/>
+        </button>
+
+        {/* ── SUK switcher — compact at top RIGHT ── */}
+        {onChangeSuk && (
+          <div style={{
+            position:"absolute", top:10, right:10, zIndex:10,
+            maxWidth:160,
+          }}>
+            <SUKSearchDropdown
+              selected={state.ACTIVE_SUK ? state.ACTIVE_SUK.key : ""}
+              compact={true}
+              onSelect={(key) => {
+                const suk = SUK_CONFIG[key];
+                if (!suk || !suk.configured) return;
+                state.SCRIPT_URL = suk.scriptUrl;
+                state.API_KEY    = suk.apiKey;
+                state.ACTIVE_SUK = suk;
+                try { sessionStorage.setItem("activeSuk", suk.key); } catch(ex) {}
+                onChangeSuk("switch", suk);
+              }}
+            />
+          </div>
+        )}
+
         {/* Outer soft aura */}
         <div style={{ position:"absolute", top:"50%", left:"50%",
           transform:"translate(-50%,-50%)", width:360, height:220, borderRadius:"50%",
@@ -884,27 +1045,6 @@ function App({ onChangeSuk, deepLink = {} }) {
           letterSpacing:"4px", textTransform:"uppercase", marginTop:5 }}>
           {state.ACTIVE_SUK ? `${state.ACTIVE_SUK.emoji} ${sukLabel(state.ACTIVE_SUK)}${state.ACTIVE_SUK.location ? " · "+state.ACTIVE_SUK.location : ""} ${state.ACTIVE_SUK.emoji}` : "🪷 Satsang Upayojana Kendra 🪷"}
         </p>
-        {/* SUK selector row in header — dropdown to switch SUK inline */}
-        {onChangeSuk && (() => {
-          return (
-            <div style={{ marginTop:10, display:"flex", alignItems:"center",
-              justifyContent:"center", gap:8, flexWrap:"wrap", maxWidth:320, margin:"10px auto 0" }}>
-              {/* Inline searchable SUK switcher */}
-              <SUKSearchDropdown
-                selected={state.ACTIVE_SUK ? state.ACTIVE_SUK.key : ""}
-                onSelect={(key) => {
-                  const suk = SUK_CONFIG[key];
-                  if (!suk || !suk.configured) return;
-                  state.SCRIPT_URL = suk.scriptUrl;
-                  state.API_KEY    = suk.apiKey;
-                  state.ACTIVE_SUK = suk;
-                  try { sessionStorage.setItem("activeSuk", suk.key); } catch(ex) {}
-                  onChangeSuk("switch", suk);
-                }}
-              />
-            </div>
-          );
-        })()}
         {(bookings.length > 0 || satsangBookings.length > 0) && (
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
             gap:8, marginTop:10, flexWrap:"wrap" }}>
@@ -951,66 +1091,26 @@ function App({ onChangeSuk, deepLink = {} }) {
         ✦ 🪷 ✦
       </div>
 
-      {/* ── TABS ── */}
-      <div style={{ display:"flex", gap:6, marginBottom: activeTab==="manage" ? 10 : 24,
+      {/* ── TABS — just the Book tab now (More Options moved to hamburger) ── */}
+      <div style={{ display:"flex", gap:6, marginBottom:24,
         background:"rgba(255,255,255,0.7)", borderRadius:14,
         padding:5, border:"1px solid rgba(59,130,246,0.15)" }}>
         {tabs.map(t => (
           <button key={t.id}
             className={`tab-btn ${activeTab===t.id ? "active":"inactive"}`}
-            onClick={() => { setActiveTab(t.id); if(t.id==="manage") setManageTab(null); }}>
+            onClick={() => setActiveTab(t.id)}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* ── MANAGE SUB-TABS ── */}
-      {activeTab === "manage" && !manageTab && (
-        <div className="card" style={{ padding:"6px 8px" }}>
-          <div style={{ fontFamily:"'Cinzel',serif", ...blueText, fontSize:13, fontWeight:700,
-            textAlign:"center", padding:"12px 0 10px", letterSpacing:1 }}>
-            What would you like to do?
-          </div>
-          <div className="blue-line" style={{ marginBottom:8 }}/>
-          {manageTabs.map((t, i) => (
-            <button key={t.id} onClick={() => {
-              setManageTab(t.id);
-            }}
-              style={{ display:"flex", alignItems:"center", gap:14, width:"100%",
-                padding:"14px 16px", border:"none", borderRadius:14, cursor:"pointer",
-                background:"transparent", textAlign:"left", transition:"all 0.18s",
-                marginBottom: i < manageTabs.length-1 ? 2 : 0 }}
-              onMouseEnter={e => e.currentTarget.style.background="rgba(29,78,216,0.06)"}
-              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-              <div style={{ width:44, height:44, borderRadius:12, flexShrink:0,
-                background:"linear-gradient(135deg,rgba(29,78,216,0.1),rgba(59,130,246,0.08))",
-                border:"1px solid rgba(59,130,246,0.15)",
-                display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>
-                <span style={{ filter: t.id==="share" ? "saturate(0) brightness(2.4) drop-shadow(0 0 4px rgba(255,255,255,0.6))" : "none" }}>
-                  {t.icon}
-                </span>
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:700, color:"#1e3a8a", fontSize:14 }}>
-                  {t.label.split(" ").slice(1).join(" ")}
-                </div>
-                <div style={{ fontSize:12, color:"rgba(29,78,216,0.45)", marginTop:2 }}>
-                  {t.desc}
-                </div>
-              </div>
-              <div style={{ color:"rgba(29,78,216,0.3)", fontSize:18 }}>›</div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Back button when inside a manage sub-tab */}
+      {/* Back button when inside a manage sub-tab (navigated from hamburger drawer) */}
       {activeTab === "manage" && manageTab && (
-        <button onClick={() => setManageTab(null)}
+        <button onClick={() => { setActiveTab("book"); setManageTab(null); }}
           style={{ display:"flex", alignItems:"center", gap:6, background:"none",
             border:"none", cursor:"pointer", color:"rgba(29,78,216,0.6)",
             fontSize:13, fontWeight:700, padding:"0 2px 14px", letterSpacing:0.3 }}>
-          ‹ Back to More Options
+          ‹ Back to Book
         </button>
       )}
 
@@ -1018,32 +1118,53 @@ function App({ onChangeSuk, deepLink = {} }) {
       {activeTab === "book" && (
         <div className="card">
 
-          {/* Toggle pill — only show satsang tab if feat.satsangBooking is on */}
-          {(feat.prayerBooking && feat.satsangBooking) && (
-            <div style={{ display:"flex", borderRadius:14, overflow:"hidden",
-              border:"1.5px solid rgba(59,130,246,0.22)", marginBottom:20,
-              background:"rgba(239,246,255,0.6)" }}>
-              {[
-                feat.prayerBooking  && { mode:"prayer",  icon:"🙏", label:"Prayer Booking" },
-                feat.satsangBooking && { mode:"satsang", icon:"🪔", label:"Satsang Booking" },
-              ].filter(Boolean).map(t => (
-                <button key={t.mode}
-                  onClick={() => { setBookMode(t.mode); setError(""); setSatsangError(""); setSatsangConfirm(null); }}
-                  style={{ flex:1, padding:"13px 8px", border:"none", cursor:"pointer",
-                    fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:13,
-                    transition:"all 0.2s",
-                    background: bookMode===t.mode
-                      ? t.mode==="prayer"
-                        ? "linear-gradient(135deg,#1d4ed8,#3b82f6)"
-                        : "linear-gradient(135deg,#78350f,#d97706)"
-                      : "transparent",
-                    color: bookMode===t.mode ? "#fff" : "rgba(29,78,216,0.5)",
-                    boxShadow: bookMode===t.mode ? "0 3px 12px rgba(0,0,0,0.18)" : "none" }}>
-                  <span style={{ marginRight:6 }}>{t.icon}</span>{t.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* ── Booking Type Dropdown ── */}
+          {(() => {
+            const BOOKING_TYPES = [
+              feat.prayerBooking  && { mode:"prayer",   icon:"🙏", label:"Prayer Booking",           color:"#1d4ed8" },
+              feat.satsangBooking && { mode:"satsang",  icon:"🪔", label:"Satsang Booking",           color:"#d97706" },
+                                     { mode:"bhadra",   icon:"🌸", label:"Bhadra Parikrama Satsang",  color:"#7c3aed" },
+                                     { mode:"matri",    icon:"🌺", label:"Matri-Sammelan",            color:"#db2777" },
+                                     { mode:"savan",    icon:"🌿", label:"Savan Parikrama",           color:"#16a34a" },
+            ].filter(Boolean);
+            const active = BOOKING_TYPES.find(t => t.mode === bookMode) || BOOKING_TYPES[0];
+            return (
+              <div style={{ marginBottom:20 }}>
+                <label className="divine-label">📋 Booking Type</label>
+                <div style={{ position:"relative" }}>
+                  <select
+                    value={bookMode}
+                    onChange={e => { setBookMode(e.target.value); setError(""); setSatsangError(""); setSatsangConfirm(null); }}
+                    style={{
+                      width:"100%", padding:"13px 44px 13px 16px",
+                      borderRadius:13, border:`2px solid ${active.color}44`,
+                      background:`linear-gradient(135deg,${active.color}0d,${active.color}06)`,
+                      color: active.color, fontFamily:"'Cinzel',serif",
+                      fontWeight:800, fontSize:14, cursor:"pointer",
+                      appearance:"none", WebkitAppearance:"none",
+                      boxShadow:`0 3px 14px ${active.color}18`,
+                      outline:"none", transition:"all 0.25s",
+                    }}
+                  >
+                    {BOOKING_TYPES.map(t => (
+                      <option key={t.mode} value={t.mode}>{t.icon}  {t.label}</option>
+                    ))}
+                  </select>
+                  {/* Custom chevron */}
+                  <div style={{
+                    position:"absolute", right:14, top:"50%", transform:"translateY(-50%)",
+                    pointerEvents:"none", color: active.color, fontSize:14, fontWeight:900,
+                  }}>▼</div>
+                </div>
+                {/* Coloured indicator strip */}
+                <div style={{
+                  height:3, borderRadius:2, marginTop:6,
+                  background:`linear-gradient(90deg,${active.color},${active.color}44)`,
+                  transition:"background 0.3s",
+                }}/>
+              </div>
+            );
+          })()}
 
 
           {/* ── Skeleton while initial data loads ── */}
@@ -1366,6 +1487,99 @@ function App({ onChangeSuk, deepLink = {} }) {
 
             </div>
           )}
+
+          {/* ══ BHADRA PARIKRAMA SATSANG / MATRI-SAMMELAN / SAVAN PARIKRAMA — Coming Soon ══ */}
+          {dataReady && (bookMode === "bhadra" || bookMode === "matri" || bookMode === "savan") && (() => {
+            const INFO = {
+              bhadra: { icon:"🌸", label:"Bhadra Parikrama Satsang", color:"#7c3aed", bg:"rgba(124,58,237,0.06)", border:"rgba(124,58,237,0.2)", desc:"Register for the sacred Bhadra Parikrama Satsang gathering." },
+              matri:  { icon:"🌺", label:"Matri-Sammelan",           color:"#db2777", bg:"rgba(219,39,119,0.06)", border:"rgba(219,39,119,0.2)", desc:"Join the divine Matri-Sammelan congregation." },
+              savan:  { icon:"🌿", label:"Savan Parikrama",          color:"#16a34a", bg:"rgba(22,163,74,0.06)",  border:"rgba(22,163,74,0.2)",  desc:"Register for the auspicious Savan Parikrama event." },
+            };
+            const t = INFO[bookMode];
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                <div style={{ textAlign:"center", marginBottom:4 }}>
+                  <div style={{ fontFamily:"'Cinzel',serif", color:t.color, fontSize:16, fontWeight:700 }}>
+                    {t.icon} {t.label}
+                  </div>
+                  <div style={{ height:1, background:`linear-gradient(90deg,transparent,${t.color}66,transparent)`, marginTop:10 }}/>
+                </div>
+
+                {/* Name */}
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>👤 Person's Name</label>
+                  <input className="divine-input" placeholder="Enter full name"
+                    value={form.name}
+                    style={{ borderColor:t.border }}
+                    onChange={e => { setError(""); setForm({...form, name:e.target.value}); }}/>
+                </div>
+
+                {/* Mobile */}
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📱 Mobile Number</label>
+                  <input className="divine-input" placeholder="Enter 10-digit mobile number"
+                    type="tel" maxLength="10"
+                    value={form.mobile}
+                    style={{ borderColor:t.border }}
+                    onChange={e => { setError(""); setForm({...form, mobile:e.target.value.replace(/[^0-9]/g,"")}); }}/>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📍 Location</label>
+                  <input className="divine-input" placeholder="Town / City"
+                    value={form.place}
+                    style={{ borderColor:t.border }}
+                    onChange={e => { setError(""); setForm({...form, place:e.target.value}); }}/>
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📅 Preferred Date</label>
+                  <input type="date" className="divine-input" value={form.date} min={getTodayStr()}
+                    style={{ fontSize:13, width:"100%", cursor:"pointer", borderColor:t.border }}
+                    onChange={e => { setError(""); setForm({...form, date:e.target.value}); }}/>
+                </div>
+
+                {/* Info note */}
+                <div style={{
+                  padding:"12px 14px", borderRadius:12, fontSize:12, lineHeight:1.7,
+                  background:t.bg, border:`1px solid ${t.border}`, color:t.color, fontWeight:600,
+                }}>
+                  {t.icon} {t.desc}<br/>
+                  <span style={{ opacity:0.7, fontWeight:500 }}>Our team will confirm your registration shortly. 🙏</span>
+                </div>
+
+                {error && (
+                  <div className={shake?"shake":""} style={{
+                    padding:"14px 18px", borderRadius:12, fontSize:13, lineHeight:1.7,
+                    background:"#fee2e2", border:"1.5px solid #fca5a5", color:"#b91c1c",
+                  }}>{error}</div>
+                )}
+
+                <div style={{ marginTop:4 }}>
+                  <button
+                    style={{
+                      width:"100%", padding:"15px", border:"none", borderRadius:13,
+                      background:`linear-gradient(135deg,${t.color} 0%,${t.color}cc 100%)`,
+                      color:"#fff", fontWeight:900, fontSize:16, cursor:"pointer",
+                      fontFamily:"'Cinzel',serif", letterSpacing:"0.5px",
+                      boxShadow:`0 5px 22px ${t.color}44`, transition:"all 0.3s",
+                    }}
+                    onClick={() => {
+                      if (!form.name.trim())   { triggerError("⚠️ Please enter your name.");           return; }
+                      if (!/^[0-9]{10}$/.test(form.mobile.trim())) { triggerError("⚠️ Please enter a valid 10-digit mobile number."); return; }
+                      if (!form.date)          { triggerError("⚠️ Please select a date.");             return; }
+                      alert(`✅ Registration received!\n\n${t.icon} ${t.label}\n👤 ${form.name}\n📅 ${form.date}\n\nOur team will contact you shortly. Jayguru 🙏`);
+                      setForm({ name:"", mobile:"", place:"", time:"", date:"" });
+                    }}
+                  >
+                    {t.icon}  Register for {t.label}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Inline Cancel Section ── */}
           {feat.cancelBooking && (<div style={{ marginTop:20 }}>

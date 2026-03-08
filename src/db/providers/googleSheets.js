@@ -61,6 +61,10 @@ async function gasPost(params) {
     action:    body.action    || '',
     sheetName: body.sheetName || 'Bookings',
     id:        body.id        || '',
+    // uploader + caption also go in URL so GAS can read them from e.parameter
+    // even when the large base64 body fails JSON.parse through the Cloudflare proxy
+    ...(body.uploader ? { uploader: body.uploader } : {}),
+    ...(body.caption  !== undefined && body.action === 'uploadPhoto' ? { caption: body.caption } : {}),
   })
 
   const res  = await fetch(`${_scriptUrl}?${urlParams}`, {
@@ -118,7 +122,7 @@ export const googleSheetsProvider = {
   photos: {
     getAll: () => getCached('getPhotos', SHEET.PHOTOS),
 
-    upload: (base64, filename, caption = '', uploader = 'Anonymous') =>
+    upload: (base64, filename, caption = '', uploader = '') =>
       new Promise((resolve, reject) => {
         try {
           gasPost({

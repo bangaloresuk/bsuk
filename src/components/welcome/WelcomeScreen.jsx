@@ -2,7 +2,7 @@ import React from 'react'
 import { SUK_CONFIG, sukLabel } from '../../config/sukConfig.js'
 import SUKSearchDropdown from './SUKSearchDropdown.jsx'
 
-function WelcomeScreen({ onSelect }) {
+function WelcomeScreen({ onSelect, currentUser, onSignOut }) {
   const [selected, setSelected] = React.useState("");
   const [launching, setLaunching] = React.useState(false);
 
@@ -17,7 +17,7 @@ function WelcomeScreen({ onSelect }) {
 
   return (
     <div style={{
-      minHeight:"100vh", display:"flex", flexDirection:"column",
+      minHeight:"100vh", display:"flex", flexDirection:"column", position:"relative",
       alignItems:"center", justifyContent:"center",
       padding:"32px 16px", position:"relative", zIndex:10,
     }}>

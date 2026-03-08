@@ -29,5 +29,5 @@ export const satsangApi = {
 
 export const photoApi = {
   getAll:  ()                           => db.photos.getAll(),
-  upload:  (file, caption, uploader)    => db.photos.upload(file, caption, uploader),
+  upload:  (base64, filename, caption, uploader) => db.photos.upload(base64, filename, caption, uploader),
 }
