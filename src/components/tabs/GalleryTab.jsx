@@ -62,40 +62,25 @@ export default function GalleryTab({
     } catch (e) { return '' }
   })()
 
-  // ── Share: image file + rich text copied to clipboard ──────
+  // ── Share: image file + rich text together ─────────────────
   const handlePhotoShare = async (p) => {
     const sukName = state.ACTIVE_SUK ? sukLabel(state.ACTIVE_SUK) : 'Satsang Upayojana Kendra'
-    const dateStr = p.date ? cleanPhotoDate(p.date) : ''
 
     const text = [
-      '🌸 *Jayguru* 🙏',
-      '',
-      '━━━━━━━━━━━━━━━━━━━━',
+      '🌸 Jayguru 🙏',
       p.caption
-        ? `🪷 *${p.caption}*`
-        : '🪷 *A sacred prayer moment*',
-      p.uploader ? `🙏 Shared by: ${p.uploader}` : '',
-      dateStr    ? `📅 ${dateStr}`                : '',
-      '━━━━━━━━━━━━━━━━━━━━',
+        ? `A sacred prayer moment 🪷\n${p.caption}`
+        : 'A sacred prayer moment 🪷',
+      p.uploader ? `— 🙏 ${p.uploader}` : '',
       '',
-      '📸 *Tap below to view the full Prayer Photo Gallery:*',
+      '📸 View the Prayer Photo Gallery:',
       galleryUrl,
       '',
-      `✨ Come, witness the divine moments captured by our Satsang family 🙏`,
-      '',
-      `🪷 *${sukName}*`,
+      `🙏 ${sukName}`,
     ].filter(l => l !== null && l !== undefined)
      .join('\n')
 
-    // ── Step 1: copy rich text to clipboard immediately ────────
-    // Must happen in the same user-gesture tick, before any async work
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch (_) {
-      // Clipboard failed silently — still attempt image share
-    }
-
-    // ── Step 2: fetch image and share as a File ────────────────
+    // ── Step 1: fetch image ────────────────────────────────────
     if (navigator.share && navigator.canShare) {
       try {
         const res  = await fetch(p.url)
@@ -109,10 +94,9 @@ export default function GalleryTab({
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: '🌸 Jayguru — Prayer Gallery',
+            text,
             files: [file],
           })
-          // Nudge shown after share sheet closes
-          alert('✅ Photo shared!\n\n📋 The message & gallery link were copied to your clipboard — paste them in the chat too 🙏')
           return
         }
       } catch (err) {
