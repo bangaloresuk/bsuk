@@ -36,6 +36,21 @@ const QUOTES = [
     text: "A man of little faith is surely a man of ignorance !",
     author: "Shree Shree Thakur Anukulchandra",
   },
+  {
+    heading: "BEAUTY",
+    text: "Have you a craving for beauty ? Try to see beauty even in ugliness !",
+    author: "Shree Shree Thakur Anukulchandra",
+  },
+  {
+    heading: "LOVE CONQUERS",
+    text: "Love and love only can conquer lust!",
+    author: "Shree Shree Thakur Anukulchandra",
+  },
+  {
+    heading: "ACTION-NOT VOICE ONLY",
+    text: "Let thy goodness blossom, not in voice only --- but in action !",
+    author: "Shree Shree Thakur Anukulchandra",
+  },
 ]
 
 let _lastIndex = -1
