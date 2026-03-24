@@ -86,6 +86,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
   const [shareMobile, setShareMobile] = React.useState("");
   const [shareResults, setShareResults] = React.useState(null);
   const [shareMsg, setShareMsg] = React.useState("");
+  const [showPastRetrieve, setShowPastRetrieve] = React.useState(false);
   // Announcements
   // Satsang Booking state
   const [satsangBookings, setSatsangBookings] = React.useState([]);
@@ -262,11 +263,11 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
       const freshSatsang  = (sd && sd.success && Array.isArray(sd.data)) ? sd.data : [];
       setBookings(freshBookings);
       setSatsangBookings(freshSatsang);
-      const prayerFound  = freshBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"prayer" }));
-      const satsangFound = freshSatsang.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"satsang" }));
-      const combined = [...prayerFound, ...satsangFound].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+      const prayerFound  = freshBookings.filter(b => b.mobile === mob && (b.date||"") >= getTodayStr()).map(b => ({ ...b, _type:"prayer" }));
+      const satsangFound = freshSatsang.filter(b => b.mobile === mob && (b.date||"") >= getTodayStr()).map(b => ({ ...b, _type:"satsang" }));
+      const combined = [...prayerFound, ...satsangFound].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
       if (combined.length === 0) {
-        setCancelMsg("❌ No bookings found for this mobile number.");
+        setCancelMsg("❌ No upcoming bookings found for this mobile number.");
         setCancelResults([]);
       } else {
         setCancelResults(combined);
@@ -426,13 +427,14 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
       return;
     }
     const mob = shareMobile.trim();
-    // Search BOTH prayer and satsang bookings
-    const prayerFound   = bookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"prayer" }));
-    const satsangFound  = satsangBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"satsang" }));
+    const todayForRetrieve = getTodayStr();
+    // Search BOTH prayer and satsang bookings — show only today & future
+    const prayerFound   = bookings.filter(b => b.mobile === mob && (b.date||"") >= todayForRetrieve).map(b => ({ ...b, _type:"prayer" }));
+    const satsangFound  = satsangBookings.filter(b => b.mobile === mob && (b.date||"") >= todayForRetrieve).map(b => ({ ...b, _type:"satsang" }));
     const combined = [...prayerFound, ...satsangFound]
-      .sort((a,b) => (b.date||"").localeCompare(a.date||"")); // newest first
+      .sort((a,b) => (a.date||"").localeCompare(b.date||"")); // ascending: Jan → Dec
     if (combined.length === 0) {
-      setShareMsg("❌ No bookings found for this mobile number.");
+      setShareMsg("❌ No upcoming bookings found for this mobile number.");
       setShareResults([]);
     } else {
       setShareResults(combined);
@@ -1768,7 +1770,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   placeholder="Enter 10-digit mobile number"
                   type="tel" maxLength="10"
                   value={shareMobile}
-                  onChange={e => { setShareMsg(""); setShareResults(null); setShareMobile(e.target.value.replace(/[^0-9]/g,"")); }}
+                  onChange={e => { setShareMsg(""); setShareResults(null); setShowPastRetrieve(false); setShareMobile(e.target.value.replace(/[^0-9]/g,"")); }}
                   style={{ flex:1 }} />
                 <button onClick={handleShareLookup}
                   style={{ padding:"12px 16px", border:"none", borderRadius:10,
@@ -2042,12 +2044,96 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
             </div>
           )}
 
-          {shareResults && shareResults.length === 0 && !shareMsg && (
-            <div style={{ textAlign:"center", padding:"24px 0",
-              color:"rgba(29,78,216,0.4)", fontSize:13 }}>
-              No bookings found for this number.
-            </div>
-          )}
+          {/* Show past bookings toggle */}
+          {shareResults && shareResults.length >= 0 && (() => {
+            const mob = shareMobile.trim();
+            const pastBookings = [
+              ...bookings.filter(b => b.mobile === mob && (b.date||"") < getTodayStr()).map(b => ({ ...b, _type:"prayer" })),
+              ...satsangBookings.filter(b => b.mobile === mob && (b.date||"") < getTodayStr()).map(b => ({ ...b, _type:"satsang" })),
+            ].sort((a,b) => (a.date||"").localeCompare(b.date||""));
+
+            if (pastBookings.length === 0 && shareResults.length === 0) return (
+              <div style={{ textAlign:"center", padding:"24px 0",
+                color:"rgba(29,78,216,0.4)", fontSize:13 }}>
+                No bookings found for this number.
+              </div>
+            );
+
+            return (
+              <div style={{ marginTop: shareResults.length > 0 ? 6 : 0 }}>
+                {pastBookings.length > 0 && (
+                  <button onClick={() => setShowPastRetrieve(p => !p)}
+                    style={{ width:"100%", padding:"10px 16px", borderRadius:10,
+                      border:"1px dashed rgba(107,114,128,0.35)",
+                      background: showPastRetrieve ? "rgba(107,114,128,0.08)" : "transparent",
+                      color:"#6b7280", fontWeight:700, fontSize:12, cursor:"pointer",
+                      display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                    <span>{showPastRetrieve ? "▲" : "▼"}</span>
+                    <span>{showPastRetrieve ? "Hide" : "Show"} Past Bookings ({pastBookings.length})</span>
+                  </button>
+                )}
+                {showPastRetrieve && pastBookings.length > 0 && (
+                  <div style={{ marginTop:10 }}>
+                    <div style={{ fontSize:11, color:"rgba(107,114,128,0.6)", fontWeight:700,
+                      textTransform:"uppercase", letterSpacing:"1px", marginBottom:10,
+                      paddingLeft:4 }}>
+                      Past Bookings
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      {pastBookings.map(b => {
+                        const isSatsang = b._type === "satsang";
+                        const cardStyle = {
+                          border: isSatsang ? "1.5px solid rgba(217,119,6,0.18)" : "1.5px solid rgba(59,130,246,0.15)",
+                          borderRadius:14, overflow:"hidden",
+                          background: isSatsang ? "rgba(249,246,239,0.6)" : "rgba(241,245,249,0.6)",
+                          opacity: 0.75,
+                        };
+                        return (
+                          <div key={b.id} style={cardStyle}>
+                            <div style={{ height:3, background: isSatsang
+                              ? "linear-gradient(90deg,#d9770688,#fbbf2444)"
+                              : "linear-gradient(90deg,#94a3b8,#cbd5e1)" }}/>
+                            <div style={{ padding:"12px 14px" }}>
+                              <div style={{ display:"flex", justifyContent:"space-between",
+                                alignItems:"flex-start", gap:8, marginBottom:4 }}>
+                                <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
+                                  color: isSatsang ? "#92400e" : "#475569", fontSize:14 }}>{b.name}</div>
+                                <div style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                                  <span style={{ fontSize:10, fontWeight:800,
+                                    color: isSatsang ? "#92400e" : "#64748b",
+                                    background: isSatsang ? "rgba(217,119,6,0.08)" : "rgba(100,116,139,0.1)",
+                                    padding:"2px 8px", borderRadius:20,
+                                    textTransform:"uppercase", letterSpacing:"0.6px" }}>
+                                    {isSatsang ? "🪔 Satsang" : "🙏 Prayer"}
+                                  </span>
+                                  <span style={{ fontSize:10, fontWeight:700, color:"#9ca3af",
+                                    background:"rgba(156,163,175,0.12)", padding:"2px 8px",
+                                    borderRadius:20, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+                                    ✓ Done
+                                  </span>
+                                </div>
+                              </div>
+                              <div style={{ fontSize:12, color:"#9ca3af", fontWeight:600 }}>
+                                {isSatsang
+                                  ? <>⏰ {cleanTime(b.time)} · 📅 {b.day ? b.day+", " : ""}{formatDate ? formatDate(b.date) : b.date}</>
+                                  : <>{(SLOT_STYLE[b.time]||SLOT_STYLE["Morning"]).icon} {b.time} · 🕐 {cleanTime(b.prayerTime)} · {formatDateWithDay(b.date)}</>
+                                }
+                              </div>
+                              {(isSatsang ? b.venue : b.place) && (
+                                <div style={{ fontSize:12, color:"#9ca3af", marginTop:3 }}>
+                                  📍 {isSatsang ? b.venue : b.place}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -2062,19 +2148,32 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           const [activeYM,  setActiveYM]  = React.useState(nowYM);
           const [typeTab,   setTypeTab]   = React.useState("all"); // all|prayer|satsang
           const [search,    setSearch]    = React.useState("");
+          const [showPastAll, setShowPastAll] = React.useState(false);
+          const [expandedCards, setExpandedCards] = React.useState({}); // id → bool
+          const toggleExpand = (id) => setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
 
           const allItems = [
             ...bookings.map(b       => ({ ...b, _type:"prayer"  })),
             ...satsangBookings.map(b => ({ ...b, _type:"satsang" })),
           ];
+          // Upcoming items — used for counts and default filtering
+          const upcomingItems = allItems.filter(b => (b.date||"") >= todayStr);
 
-          // All YYYY-MM months that have data, sorted asc
+          // Only upcoming months in navigator (today+future); past revealed via toggle
           const allMonths = React.useMemo(() => {
-            const seen = new Set(allItems.map(b => (b.date||"").slice(0,7)).filter(Boolean));
-            // always include current month even if empty
+            const seen = new Set(upcomingItems.map(b => (b.date||"").slice(0,7)).filter(Boolean));
             seen.add(nowYM);
             return Array.from(seen).sort();
           }, [bookings, satsangBookings]);
+
+          // Past months — for the toggle
+          const pastMonths = React.useMemo(() => {
+            const seen = new Set(allItems.map(b => (b.date||"").slice(0,7)).filter(Boolean));
+            return Array.from(seen).filter(m => m < nowYM).sort();
+          }, [bookings, satsangBookings]);
+
+          // Past bookings (all types) grouped by date, sorted asc
+          const pastItems = allItems.filter(b => (b.date||"") < todayStr);
 
           const monthIdx = allMonths.indexOf(activeYM);
 
@@ -2086,8 +2185,8 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
 
           const isSearching = search.trim().length > 0;
 
-          // When searching — spans ALL months; otherwise current month only
-          const filtered = allItems.filter(b => {
+          // When searching — spans upcoming; otherwise current/future month only
+          const filtered = upcomingItems.filter(b => {
             if (typeTab === "prayer"  && b._type !== "prayer")  return false;
             if (typeTab === "satsang" && b._type !== "satsang") return false;
             if (isSearching) {
@@ -2108,8 +2207,8 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           });
           const sortedDates = Object.keys(groups).sort();
 
-          // Counts for type tabs
-          const monthItems = allItems.filter(b => (b.date||"").startsWith(activeYM));
+          // Counts for type tabs — upcoming items in the active month
+          const monthItems = upcomingItems.filter(b => (b.date||"").startsWith(activeYM));
           const counts = {
             all:     monthItems.length,
             prayer:  monthItems.filter(b => b._type==="prayer").length,
@@ -2279,12 +2378,16 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
 
                         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                           {dayItems.map(b => {
+                            const isExpanded = !!expandedCards[b.id];
                             if (b._type === "prayer") {
                               const sc = SLOT_STYLE[b.time] || SLOT_STYLE["Morning"];
                               return (
-                                <div key={b.id} style={{ borderRadius:14, overflow:"hidden",
-                                  border:"1px solid rgba(59,130,246,0.18)",
-                                  background:"rgba(239,246,255,0.65)" }}>
+                                <div key={b.id} onClick={() => toggleExpand(b.id)}
+                                  style={{ borderRadius:14, overflow:"hidden", cursor:"pointer",
+                                    border:"1px solid rgba(59,130,246,0.18)",
+                                    background:"rgba(239,246,255,0.65)",
+                                    transition:"box-shadow 0.15s",
+                                    boxShadow: isExpanded ? "0 4px 16px rgba(29,78,216,0.12)" : "none" }}>
                                   <div style={{ height:3,
                                     background:`linear-gradient(90deg,${sc.color},${sc.color}55)` }}/>
                                   <div style={{ padding:"12px 14px" }}>
@@ -2292,24 +2395,45 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                                       alignItems:"flex-start", gap:8, marginBottom:4 }}>
                                       <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
                                         color:"#1e3a8a", fontSize:14 }}>{b.name}</div>
-                                      <span style={{ flexShrink:0, fontSize:10, fontWeight:800,
-                                        color:"#1d4ed8", background:"rgba(29,78,216,0.09)",
-                                        padding:"2px 8px", borderRadius:20,
-                                        textTransform:"uppercase", letterSpacing:"0.6px" }}>
-                                        🙏 Prayer
-                                      </span>
+                                      <div style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                                        <span style={{ fontSize:10, fontWeight:800,
+                                          color:"#1d4ed8", background:"rgba(29,78,216,0.09)",
+                                          padding:"2px 8px", borderRadius:20,
+                                          textTransform:"uppercase", letterSpacing:"0.6px" }}>
+                                          🙏 Prayer
+                                        </span>
+                                        <span style={{ fontSize:11, color:"rgba(29,78,216,0.35)" }}>
+                                          {isExpanded ? "▲" : "▼"}
+                                        </span>
+                                      </div>
                                     </div>
                                     <div style={{ fontSize:13, color:sc.color,
                                       fontWeight:700, marginBottom:3 }}>
                                       {sc.icon} {b.time} · 🕐 {cleanTime(b.prayerTime)}
                                     </div>
-                                    {b.place && (
-                                      <div style={{ fontSize:12, color:"#6b7280" }}>
-                                        {b.place.startsWith("http")
-                                          ? <a href={b.place} target="_blank" rel="noopener noreferrer"
-                                              style={{ color:"#1d4ed8", fontWeight:600, textDecoration:"none" }}>
-                                              📍 View on Map</a>
-                                          : <>📍 {b.place}</>}
+                                    {isExpanded ? (
+                                      <div style={{ marginTop:8, paddingTop:8,
+                                        borderTop:"1px solid rgba(59,130,246,0.1)" }}>
+                                        {b.mobile && (
+                                          <div style={{ fontSize:12, color:"#6b7280", marginBottom:3 }}>
+                                            📱 {b.mobile}
+                                          </div>
+                                        )}
+                                        {b.place && (
+                                          <div style={{ fontSize:12, color:"#6b7280" }}>
+                                            {b.place.startsWith("http")
+                                              ? <a href={b.place} target="_blank" rel="noopener noreferrer"
+                                                  onClick={e => e.stopPropagation()}
+                                                  style={{ color:"#1d4ed8", fontWeight:600, textDecoration:"none" }}>
+                                                  📍 View on Map</a>
+                                              : <>📍 {b.place}</>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize:11, color:"rgba(29,78,216,0.35)",
+                                        marginTop:2, fontStyle:"italic" }}>
+                                        Tap for details
                                       </div>
                                     )}
                                   </div>
@@ -2318,9 +2442,12 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                             }
                             // Satsang
                             return (
-                              <div key={b.id} style={{ borderRadius:14, overflow:"hidden",
-                                border:"1px solid rgba(217,119,6,0.2)",
-                                background:"rgba(255,251,235,0.75)" }}>
+                              <div key={b.id} onClick={() => toggleExpand(b.id)}
+                                style={{ borderRadius:14, overflow:"hidden", cursor:"pointer",
+                                  border:"1px solid rgba(217,119,6,0.2)",
+                                  background:"rgba(255,251,235,0.75)",
+                                  transition:"box-shadow 0.15s",
+                                  boxShadow: isExpanded ? "0 4px 16px rgba(217,119,6,0.12)" : "none" }}>
                                 <div style={{ height:3,
                                   background:"linear-gradient(90deg,#d97706,#fbbf2455)" }}/>
                                 <div style={{ padding:"12px 14px" }}>
@@ -2328,36 +2455,56 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                                     alignItems:"flex-start", gap:8, marginBottom:4 }}>
                                     <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
                                       color:"#78350f", fontSize:14 }}>{b.name}</div>
-                                    <span style={{ flexShrink:0, fontSize:10, fontWeight:800,
-                                      color:"#92400e", background:"rgba(217,119,6,0.1)",
-                                      padding:"2px 8px", borderRadius:20,
-                                      textTransform:"uppercase", letterSpacing:"0.6px" }}>
-                                      🪔 Satsang
-                                    </span>
+                                    <div style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                                      <span style={{ fontSize:10, fontWeight:800,
+                                        color:"#92400e", background:"rgba(217,119,6,0.1)",
+                                        padding:"2px 8px", borderRadius:20,
+                                        textTransform:"uppercase", letterSpacing:"0.6px" }}>
+                                        🪔 Satsang
+                                      </span>
+                                      <span style={{ fontSize:11, color:"rgba(217,119,6,0.4)" }}>
+                                        {isExpanded ? "▲" : "▼"}
+                                      </span>
+                                    </div>
                                   </div>
                                   <div style={{ fontSize:13, color:"#d97706",
                                     fontWeight:700, marginBottom:3 }}>
                                     ⏰ {cleanTime(b.time)} onwards
                                   </div>
-                                  {b.venue && (
-                                    <div style={{ fontSize:12, color:"#6b7280" }}>
-                                      {b.mapsLink
-                                        ? <a href={b.mapsLink} target="_blank" rel="noopener noreferrer"
-                                            style={{ color:"#d97706", fontWeight:600, textDecoration:"none" }}>
-                                            📍 {b.venue} · Map</a>
-                                        : <>📍 {b.venue}</>}
+                                  {isExpanded ? (
+                                    <div style={{ marginTop:8, paddingTop:8,
+                                      borderTop:"1px solid rgba(217,119,6,0.12)" }}>
+                                      {b.mobile && (
+                                        <div style={{ fontSize:12, color:"#6b7280", marginBottom:3 }}>
+                                          📱 {b.mobile}
+                                        </div>
+                                      )}
+                                      {b.venue && (
+                                        <div style={{ fontSize:12, color:"#6b7280", marginBottom:3 }}>
+                                          {b.mapsLink
+                                            ? <a href={b.mapsLink} target="_blank" rel="noopener noreferrer"
+                                                onClick={e => e.stopPropagation()}
+                                                style={{ color:"#d97706", fontWeight:600, textDecoration:"none" }}>
+                                                📍 {b.venue} · View Map</a>
+                                            : <>📍 {b.venue}</>}
+                                        </div>
+                                      )}
+                                      {b.hostedBy && (
+                                        <div style={{ fontSize:12, color:"#92400e",
+                                          fontWeight:600, marginBottom:3 }}>
+                                          🙏 {b.hostedBy}
+                                        </div>
+                                      )}
+                                      {b.occasion && (
+                                        <div style={{ fontSize:12, color:"#d97706", fontWeight:600 }}>
+                                          🪔 {b.occasion}
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
-                                  {b.hostedBy && (
-                                    <div style={{ fontSize:12, color:"#92400e",
-                                      fontWeight:600, marginTop:3 }}>
-                                      🙏 {b.hostedBy}
-                                    </div>
-                                  )}
-                                  {b.occasion && (
-                                    <div style={{ fontSize:12, color:"#d97706",
-                                      fontWeight:600, marginTop:3 }}>
-                                      🪔 {b.occasion}
+                                  ) : (
+                                    <div style={{ fontSize:11, color:"rgba(217,119,6,0.4)",
+                                      marginTop:2, fontStyle:"italic" }}>
+                                      Tap for details
                                     </div>
                                   )}
                                 </div>
@@ -2370,6 +2517,150 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   })}
                 </div>
               )}
+
+              {/* ── Show Past Bookings toggle ── */}
+              {(() => {
+                const pastFiltered = pastItems.filter(b => {
+                  if (typeTab === "prayer"  && b._type !== "prayer")  return false;
+                  if (typeTab === "satsang" && b._type !== "satsang") return false;
+                  if (isSearching) {
+                    const q = search.toLowerCase();
+                    return (b.name||"").toLowerCase().includes(q)
+                        || (b.venue||"").toLowerCase().includes(q)
+                        || (b.hostedBy||"").toLowerCase().includes(q);
+                  }
+                  return true;
+                }).sort((a,b) => (a.date||"").localeCompare(b.date||""));
+
+                if (pastFiltered.length === 0) return null;
+
+                // Group past items by date
+                const pastGroups = {};
+                pastFiltered.forEach(b => {
+                  const d = b.date || "Unknown";
+                  if (!pastGroups[d]) pastGroups[d] = [];
+                  pastGroups[d].push(b);
+                });
+                const pastDates = Object.keys(pastGroups).sort();
+
+                return (
+                  <div style={{ marginTop:8 }}>
+                    <button onClick={() => setShowPastAll(p => !p)}
+                      style={{ width:"100%", padding:"10px 16px", borderRadius:10,
+                        border:"1px dashed rgba(107,114,128,0.35)",
+                        background: showPastAll ? "rgba(107,114,128,0.08)" : "transparent",
+                        color:"#6b7280", fontWeight:700, fontSize:12, cursor:"pointer",
+                        display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                      <span>{showPastAll ? "▲" : "▼"}</span>
+                      <span>{showPastAll ? "Hide" : "Show"} Past Bookings ({pastFiltered.length})</span>
+                    </button>
+
+                    {showPastAll && (
+                      <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:6 }}>
+                        {pastDates.map(date => {
+                          const dayItems = pastGroups[date];
+                          const dateLabel = new Date(date+"T00:00:00")
+                            .toLocaleDateString("en-IN",{ weekday:"short", day:"numeric", month:"short" });
+                          return (
+                            <div key={date}>
+                              {/* Date strip */}
+                              <div style={{ display:"flex", alignItems:"center", gap:8, margin:"10px 0 6px" }}>
+                                <div style={{ padding:"3px 12px", borderRadius:20,
+                                  fontSize:11, fontWeight:800, whiteSpace:"nowrap",
+                                  background:"rgba(107,114,128,0.09)",
+                                  border:"1px solid rgba(107,114,128,0.18)",
+                                  color:"#6b7280" }}>
+                                  {dateLabel}
+                                  <span style={{ marginLeft:5, opacity:0.6 }}>· {dayItems.length}</span>
+                                  <span style={{ marginLeft:6, fontSize:10, fontWeight:700,
+                                    color:"#9ca3af" }}>✓ Done</span>
+                                </div>
+                                <div style={{ flex:1, height:1,
+                                  background:"linear-gradient(90deg,rgba(107,114,128,0.1),transparent)" }}/>
+                              </div>
+                              {/* Cards — dimmed */}
+                              <div style={{ display:"flex", flexDirection:"column", gap:8,
+                                opacity:0.65, filter:"saturate(0.4)" }}>
+                                {dayItems.map(b => {
+                                  const isExp = !!expandedCards[b.id];
+                                  const isSatsang = b._type === "satsang";
+                                  return (
+                                    <div key={b.id} onClick={() => toggleExpand(b.id)}
+                                      style={{ borderRadius:14, overflow:"hidden", cursor:"pointer",
+                                        border: isSatsang ? "1px solid rgba(217,119,6,0.2)" : "1px solid rgba(59,130,246,0.18)",
+                                        background: isSatsang ? "rgba(255,251,235,0.75)" : "rgba(239,246,255,0.65)" }}>
+                                      <div style={{ height:3, background: isSatsang
+                                        ? "linear-gradient(90deg,#d97706,#fbbf2455)"
+                                        : "linear-gradient(90deg,#94a3b8,#cbd5e155)" }}/>
+                                      <div style={{ padding:"12px 14px" }}>
+                                        <div style={{ display:"flex", justifyContent:"space-between",
+                                          alignItems:"flex-start", gap:8, marginBottom:4 }}>
+                                          <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
+                                            color: isSatsang ? "#78350f" : "#1e3a8a", fontSize:14 }}>{b.name}</div>
+                                          <div style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                                            <span style={{ fontSize:10, fontWeight:800,
+                                              color: isSatsang ? "#92400e" : "#1d4ed8",
+                                              background: isSatsang ? "rgba(217,119,6,0.1)" : "rgba(29,78,216,0.09)",
+                                              padding:"2px 8px", borderRadius:20,
+                                              textTransform:"uppercase", letterSpacing:"0.6px" }}>
+                                              {isSatsang ? "🪔 Satsang" : "🙏 Prayer"}
+                                            </span>
+                                            <span style={{ fontSize:11, color: isSatsang ? "rgba(217,119,6,0.4)" : "rgba(29,78,216,0.35)" }}>
+                                              {isExp ? "▲" : "▼"}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div style={{ fontSize:13, fontWeight:700, marginBottom:3,
+                                          color: isSatsang ? "#d97706" : (SLOT_STYLE[b.time]||SLOT_STYLE["Morning"]).color }}>
+                                          {isSatsang
+                                            ? <>⏰ {cleanTime(b.time)} onwards</>
+                                            : <>{(SLOT_STYLE[b.time]||SLOT_STYLE["Morning"]).icon} {b.time} · 🕐 {cleanTime(b.prayerTime)}</>}
+                                        </div>
+                                        {isExp ? (
+                                          <div style={{ marginTop:8, paddingTop:8,
+                                            borderTop: isSatsang ? "1px solid rgba(217,119,6,0.12)" : "1px solid rgba(59,130,246,0.1)" }}>
+                                            {b.mobile && <div style={{ fontSize:12, color:"#6b7280", marginBottom:3 }}>📱 {b.mobile}</div>}
+                                            {!isSatsang && b.place && (
+                                              <div style={{ fontSize:12, color:"#6b7280" }}>
+                                                {b.place.startsWith("http")
+                                                  ? <a href={b.place} target="_blank" rel="noopener noreferrer"
+                                                      onClick={e => e.stopPropagation()}
+                                                      style={{ color:"#1d4ed8", fontWeight:600, textDecoration:"none" }}>📍 View on Map</a>
+                                                  : <>📍 {b.place}</>}
+                                              </div>
+                                            )}
+                                            {isSatsang && b.venue && (
+                                              <div style={{ fontSize:12, color:"#6b7280", marginBottom:3 }}>
+                                                {b.mapsLink
+                                                  ? <a href={b.mapsLink} target="_blank" rel="noopener noreferrer"
+                                                      onClick={e => e.stopPropagation()}
+                                                      style={{ color:"#d97706", fontWeight:600, textDecoration:"none" }}>📍 {b.venue} · View Map</a>
+                                                  : <>📍 {b.venue}</>}
+                                              </div>
+                                            )}
+                                            {isSatsang && b.hostedBy && <div style={{ fontSize:12, color:"#92400e", fontWeight:600, marginBottom:3 }}>🙏 {b.hostedBy}</div>}
+                                            {isSatsang && b.occasion && <div style={{ fontSize:12, color:"#d97706", fontWeight:600 }}>🪔 {b.occasion}</div>}
+                                          </div>
+                                        ) : (
+                                          <div style={{ fontSize:11, fontStyle:"italic", marginTop:2,
+                                            color: isSatsang ? "rgba(217,119,6,0.4)" : "rgba(29,78,216,0.35)" }}>
+                                            Tap for details
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
             </div>
           );
         };
