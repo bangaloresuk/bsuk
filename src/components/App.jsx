@@ -430,7 +430,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     const prayerFound   = bookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"prayer" }));
     const satsangFound  = satsangBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"satsang" }));
     const combined = [...prayerFound, ...satsangFound]
-      .sort((a,b) => (b.date||"").localeCompare(a.date||"")); // newest first
+      .sort((a,b) => (a.date||"").localeCompare(b.date||"")); // oldest first (Jan → Feb → Mar)
     if (combined.length === 0) {
       setShareMsg("❌ No bookings found for this mobile number.");
       setShareResults([]);
@@ -1793,7 +1793,14 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           )}
 
           {/* Results — prayer + satsang combined */}
-          {shareResults && shareResults.length > 0 && (
+          {shareResults && shareResults.length > 0 && (() => {
+            const _todayStr = getTodayStr();
+            const [showRetrievePast, setShowRetrievePast] = React.useState(false);
+            const futureResults = shareResults.filter(b => (b.date||"") >= _todayStr);
+            const pastResults   = shareResults.filter(b => (b.date||"") <  _todayStr)
+              .sort((a,b) => (b.date||"").localeCompare(a.date||"")); // newest first for past
+            const displayResults = futureResults; // ascending already from handleShareLookup
+            return (
             <div style={{ marginTop:18 }}>
               <div style={{ fontSize:12, color:"rgba(29,78,216,0.6)", fontWeight:700,
                 textTransform:"uppercase", letterSpacing:"1px", marginBottom:12 }}>
@@ -1805,7 +1812,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                 </span>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {shareResults.map(b => {
+                {displayResults.map(b => {
                   const isSatsang = b._type === "satsang";
 
                   /* ── PRAYER CARD ── */
@@ -2038,9 +2045,107 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                     </div>
                   );
                 })}
+                {/* ── Show Past Bookings toggle (Retrieve tab) ── */}
+                {!shareResults.__searching && pastResults.length > 0 && (
+                  <div style={{ marginTop:8 }}>
+                    <button onClick={() => setShowRetrievePast(p => !p)}
+                      style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center",
+                        gap:8, padding:"11px 14px", borderRadius:12,
+                        border:"1.5px solid rgba(29,78,216,0.2)",
+                        background:"rgba(239,246,255,0.6)",
+                        color:"#1d4ed8", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                      <span>{showRetrievePast ? "▲" : "▼"}</span>
+                      <span>{showRetrievePast ? "Hide Past Bookings" : `Show Past Bookings (${pastResults.length})`}</span>
+                    </button>
+                    {showRetrievePast && (
+                      <div style={{ display:"flex", flexDirection:"column", gap:14, marginTop:12 }}>
+                        {pastResults.map(b => {
+                          const isSatsang2 = b._type === "satsang";
+                          if (!isSatsang2) {
+                            const sc2 = SLOT_STYLE[b.time] || SLOT_STYLE["Morning"];
+                            const placeStr2 = b.place || "";
+                            const urlMatch2 = placeStr2.match(/(https?:\/\/[^\s]+)/);
+                            const extractedMapsLink2 = urlMatch2 ? urlMatch2[1] : "";
+                            const cleanPlace2 = extractedMapsLink2 ? placeStr2.replace(extractedMapsLink2, "").trim() : placeStr2;
+                            const shareConf2 = { name:b.name, mobile:b.mobile, time:b.time,
+                              date:b.date, prayerTime:cleanTime(b.prayerTime), place:cleanPlace2 || placeStr2, mapsLink:extractedMapsLink2, id:b.id };
+                            return (
+                              <div key={b.id} style={{ border:"1.5px solid rgba(59,130,246,0.15)",
+                                borderRadius:16, overflow:"hidden", opacity:0.72,
+                                background:"rgba(241,245,249,0.7)" }}>
+                                <div style={{ height:4, background:"linear-gradient(90deg,#94a3b8,#cbd5e1,#e2e8f0)" }}/>
+                                <div style={{ padding:"14px 16px" }}>
+                                  <div style={{ marginBottom:8 }}>
+                                    <span style={{ fontSize:10, fontWeight:800, color:"#64748b",
+                                      background:"rgba(100,116,139,0.1)", padding:"3px 9px",
+                                      borderRadius:20, letterSpacing:"1px", textTransform:"uppercase" }}>
+                                      🌅 Prayer · Past
+                                    </span>
+                                  </div>
+                                  <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
+                                    color:"#334155", fontSize:14, marginBottom:4 }}>{b.name}</div>
+                                  <div style={{ fontSize:13, color:sc2.color, fontWeight:700, opacity:0.8 }}>
+                                    {sc2.icon} {b.time} Prayer · {formatDateWithDay(b.date)}
+                                  </div>
+                                  <div style={{ fontSize:12, color:"#6b7280", marginTop:3 }}>
+                                    🕐 {cleanTime(b.prayerTime)}
+                                  </div>
+                                  <div style={{ marginTop:10 }}>
+                                    <button disabled={cancelling === b.id} onClick={() => handleCancelBooking(b.id)}
+                                      style={{ width:"100%", padding:"10px", border:"1px solid rgba(220,38,38,0.3)",
+                                        borderRadius:10, background:"rgba(254,242,242,0.8)",
+                                        color:"#b91c1c", fontWeight:700, fontSize:12, cursor:"pointer",
+                                        opacity: cancelling===b.id ? 0.6 : 1 }}>
+                                      {cancelling===b.id ? "⏳ Cancelling..." : "❌ Cancel This Booking"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={b.id} style={{ border:"1.5px solid rgba(217,119,6,0.15)",
+                              borderRadius:16, overflow:"hidden", opacity:0.72,
+                              background:"rgba(250,247,235,0.7)" }}>
+                              <div style={{ height:4, background:"linear-gradient(90deg,#94a3b8,#cbd5e1,#e2e8f0)" }}/>
+                              <div style={{ padding:"14px 16px" }}>
+                                <div style={{ marginBottom:8 }}>
+                                  <span style={{ fontSize:10, fontWeight:800, color:"#92400e",
+                                    background:"rgba(217,119,6,0.1)", padding:"3px 9px",
+                                    borderRadius:20, letterSpacing:"1px", textTransform:"uppercase" }}>
+                                    🪔 Satsang · Past
+                                  </span>
+                                </div>
+                                <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
+                                  color:"#78350f", fontSize:14, marginBottom:4 }}>{b.name}</div>
+                                <div style={{ fontSize:13, color:"#d97706", fontWeight:700, opacity:0.8 }}>
+                                  📅 {b.day ? b.day+", " : ""}{formatDate ? formatDate(b.date) : b.date}
+                                </div>
+                                <div style={{ fontSize:12, color:"#6b7280", marginTop:3 }}>
+                                  ⏰ {cleanTime(b.time)} onwards
+                                  {b.venue && ` · 📍 ${b.venue}`}
+                                </div>
+                                <div style={{ marginTop:10 }}>
+                                  <button disabled={cancelling === b.id} onClick={() => handleCancelSatsang(b.id)}
+                                    style={{ width:"100%", padding:"10px", border:"1px solid rgba(217,119,6,0.3)",
+                                      borderRadius:10, background:"rgba(255,251,235,0.9)",
+                                      color:"#92400e", fontWeight:700, fontSize:12, cursor:"pointer",
+                                      opacity: cancelling===b.id ? 0.6 : 1 }}>
+                                    {cancelling===b.id ? "⏳ Cancelling..." : "❌ Cancel This Satsang"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {shareResults && shareResults.length === 0 && !shareMsg && (
             <div style={{ textAlign:"center", padding:"24px 0",
