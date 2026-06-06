@@ -33,6 +33,7 @@ import { DataLoadingOverlay } from './shared/DataLoadingOverlay.jsx'
 // ── Tab components ────────────────────────────────────────────
 import PrayerTimesTab from './tabs/PrayerTimesTab.jsx'
 import GalleryTab     from './tabs/GalleryTab.jsx'
+import DashboardTab   from './tabs/DashboardTab.jsx'
 
 function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequestSignIn }) {
   // Merge DEFAULT_FEATURES with this SUK's overrides
@@ -653,6 +654,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     feat.allBookings     && { id:"all",      label:"📖 All Bookings",        desc:"See all prayer bookings by date",       icon:"📖" },
     feat.messages        && { id:"announce", label:"📨 Messages",             desc:"Create invitations & custom messages",   icon:"📨" },
     feat.photoGallery    && { id:"gallery",  label:"🌸 Prayer Photo Gallery", desc:"Upload & view prayer photo memories",   icon:"🌸" },
+    currentUser          && { id:"dashboard", label:"📊 Devotee Dashboard",    desc:"Track bookings & engagement per devotee", icon:"📊" },
   ].filter(Boolean);
   const [calDate,   setCalDate]   = React.useState(() => {
     const t = new Date(); t.setHours(0,0,0,0);
@@ -2902,6 +2904,14 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
       )}
 
 
+
+      {/* ════════ DEVOTEE DASHBOARD TAB ════════ */}
+      {activeTab === "manage" && manageTab === "dashboard" && currentUser && (
+        <DashboardTab
+          bookings={bookings}
+          satsangBookings={satsangBookings}
+        />
+      )}
 
       {/* Footer */}
       <div style={{ textAlign:"center", marginTop:36, paddingBottom:10 }}>
