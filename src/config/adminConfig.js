@@ -1,17 +1,13 @@
 // ============================================================
 //  adminConfig — Admin Access Configuration
 //  ─────────────────────────────────────────────────────────
-//  Step 1: Set your Gmail address below
-//  Step 2: Paste your GAS Script URL (same one used for bookings)
-//  Step 3: The OTP will be emailed to your Gmail via GAS
+//  NO emails stored here — admin emails are managed securely
+//  in Google Apps Script (ADMIN_EMAILS array in GAS).
+//  This file is safe to commit to GitHub.
 // ============================================================
 
 export const ADMIN_CONFIG = {
-  // ← Your Gmail address (must match ADMIN_EMAILS in GAS)
-  adminEmail: 'bangaloresuk@gmail.com',
-
   // ← Your deployed GAS Script URL (same URL used for bookings)
-  // e.g. 'https://script.google.com/macros/s/AKfycb.../exec'
   gasScriptUrl: 'https://bangaloresuk-proxy.bangaloresuk.workers.dev',
 
   // Display name
