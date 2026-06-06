@@ -1,427 +1,721 @@
 // ============================================================
-//  DashboardTab v2 — Admin Devotee Engagement Dashboard
-//  Tiers based on BOOKING FREQUENCY (avg gap between bookings)
-//  not just total count.
+//  DashboardTab — Analytics Dashboard (Admin only)
+//  ─────────────────────────────────────────────────────────
+//  Props:
+//    bookings        — prayer bookings array from App state
+//    satsangBookings — satsang bookings array from App state
+//
+//  Pages:
+//    1. Executive Summary  — KPIs, morning/evening, day of week
+//    2. Member Analytics   — top members, booking frequency
+//    3. Monthly Trends     — line chart across all months
+//    4. Upcoming           — next 30 days calendar view
 // ============================================================
 
 import React from 'react'
 
-// ── Frequency tiers based on average days between bookings ──
-// avg gap < 14d  → Weekly
-// avg gap < 35d  → Monthly
-// avg gap < 100d → Quarterly
-// avg gap < 200d → Half-Yearly
-// only 1 booking → One-Time
-const getFreqTier = (count, avgGapDays) => {
-  if (count === 0) return { label: 'No Data',     short: '—',        color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.2)', icon: '⬜', bar: '#e5e7eb' }
-  if (count === 1) return { label: 'One-Time',    short: '1×',       color: '#6b7280', bg: 'rgba(107,114,128,0.08)', border: 'rgba(107,114,128,0.2)', icon: '🌱', bar: '#d1d5db' }
-  if (avgGapDays < 14)  return { label: 'Weekly',      short: '~weekly',  color: '#7c3aed', bg: 'rgba(124,58,237,0.08)', border: 'rgba(124,58,237,0.2)', icon: '⭐', bar: '#a78bfa' }
-  if (avgGapDays < 35)  return { label: 'Monthly',     short: '~monthly', color: '#16a34a', bg: 'rgba(22,163,74,0.08)',  border: 'rgba(22,163,74,0.2)',  icon: '🙏', bar: '#4ade80' }
-  if (avgGapDays < 100) return { label: 'Quarterly',   short: '~3 mths',  color: '#d97706', bg: 'rgba(217,119,6,0.08)', border: 'rgba(217,119,6,0.2)',  icon: '🌤️', bar: '#fcd34d' }
-  return                        { label: 'Half-Yearly', short: '~6 mths',  color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.2)', icon: '🌸', bar: '#93c5fd' }
+// ── Chart.js loaded via CDN in index.html — imported lazily ──
+// We load it once the component mounts to avoid SSR issues
+
+const BLUE   = '#1d4ed8'
+const TEAL   = '#0f6e56'
+const AMBER  = '#b45309'
+const CORAL  = '#b91c1c'
+const PURPLE = '#6d28d9'
+
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+function getTodayStr() {
+  const t = new Date(); t.setHours(0,0,0,0)
+  return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`
 }
 
-function formatDate(dateStr) {
+function formatDateShort(dateStr) {
   if (!dateStr) return ''
-  try {
-    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric'
-    })
-  } catch { return dateStr }
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
-function avgGap(sortedDates) {
-  if (sortedDates.length < 2) return 9999
-  let total = 0
-  for (let i = 1; i < sortedDates.length; i++) {
-    const d1 = new Date(sortedDates[i-1] + 'T00:00:00')
-    const d2 = new Date(sortedDates[i]   + 'T00:00:00')
-    total += (d2 - d1) / 86400000
-  }
-  return Math.round(total / (sortedDates.length - 1))
+function formatDateWithDay(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
 }
 
-export default function DashboardTab({ bookings, satsangBookings }) {
-  const [filterBy,  setFilterBy]  = React.useState('all')
-  const [sortBy,    setSortBy]    = React.useState('count')
-  const [search,    setSearch]    = React.useState('')
-  const [copied,    setCopied]    = React.useState(null)
-  const [expanded,  setExpanded]  = React.useState(null)
+function initials(name) {
+  const parts = (name || '').trim().split(' ').filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  return (name || '??').substring(0, 2).toUpperCase()
+}
 
-  // ── Build per-person stats from real data ────────────────
-  const stats = React.useMemo(() => {
-    const map = {}
+const AVATAR_BG   = ['#bfdbfe','#a7f3d0','#fed7aa','#ddd6fe','#fecaca','#d1fae5','#fde68a','#e0e7ff']
+const AVATAR_TEXT = ['#1e40af','#065f46','#92400e','#4c1d95','#991b1b','#064e3b','#78350f','#3730a3']
 
-    const add = (b, type) => {
-      const mob  = String(b.mobile || '').trim().replace(/\D/g, '')
-      const name = String(b.name   || '').trim()
-      const date = String(b.date   || '').trim()
-      if (!mob || mob.length < 5) return
+// ── Tiny inline chart using canvas ───────────────────────────
+function MiniBarChart({ data, labels, color = BLUE, height = 100 }) {
+  const canvasRef = React.useRef(null)
+  const chartRef  = React.useRef(null)
 
-      if (!map[mob]) {
-        map[mob] = { mobile: mob, name, prayerDates: [], satsangDates: [] }
-      }
-      // Keep the most recently seen name (non-empty)
-      if (name) map[mob].name = name
-
-      if (type === 'prayer')  map[mob].prayerDates.push(date)
-      if (type === 'satsang') map[mob].satsangDates.push(date)
-    }
-
-    bookings.forEach(b        => add(b, 'prayer'))
-    satsangBookings.forEach(b => add(b, 'satsang'))
-
-    return Object.values(map).map(p => {
-      const allDates = [...p.prayerDates, ...p.satsangDates].sort()
-      const gap      = avgGap(allDates)
-      const tier     = getFreqTier(allDates.length, gap)
-      return {
-        ...p,
-        total:     allDates.length,
-        pCount:    p.prayerDates.length,
-        sCount:    p.satsangDates.length,
-        allDates,
-        firstDate: allDates[0]   || '',
-        lastDate:  allDates[allDates.length - 1] || '',
-        avgGap:    gap,
-        tier,
-      }
+  React.useEffect(() => {
+    if (!canvasRef.current || !window.Chart) return
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null }
+    chartRef.current = new window.Chart(canvasRef.current, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: color + 'cc',
+          borderRadius: 4,
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 0 } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.05)' }, ticks: { font: { size: 10 }, color: '#6b7280', stepSize: 1 } },
+        },
+      },
     })
-  }, [bookings, satsangBookings])
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [JSON.stringify(data), JSON.stringify(labels), color])
 
-  const maxCount = Math.max(1, ...stats.map(s => s.total))
+  return (
+    <div style={{ position: 'relative', width: '100%', height }}>
+      <canvas ref={canvasRef}
+        role="img"
+        aria-label={`Bar chart: ${labels.join(', ')}`}
+      />
+    </div>
+  )
+}
 
-  // ── Summary numbers ──────────────────────────────────────
-  const totalBookings   = bookings.length + satsangBookings.length
-  const totalDevotees   = stats.length
-  const activeThisMonth = React.useMemo(() => {
-    const ym = new Date().toISOString().slice(0, 7)
-    return stats.filter(s => s.allDates.some(d => d.startsWith(ym))).length
-  }, [stats])
+function MiniDoughnut({ morning, evening }) {
+  const canvasRef = React.useRef(null)
+  const chartRef  = React.useRef(null)
 
-  // ── Tier counts ──────────────────────────────────────────
-  const tierCounts = React.useMemo(() => {
-    const c = { weekly: 0, monthly: 0, quarterly: 0, 'half-yearly': 0, 'one-time': 0 }
-    stats.forEach(s => {
-      const key = s.tier.label.toLowerCase()
-      if (c[key] !== undefined) c[key]++
+  React.useEffect(() => {
+    if (!canvasRef.current || !window.Chart) return
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null }
+    chartRef.current = new window.Chart(canvasRef.current, {
+      type: 'doughnut',
+      data: {
+        labels: ['Morning', 'Evening'],
+        datasets: [{
+          data: [morning, evening],
+          backgroundColor: ['#1d4ed8cc', '#d97706cc'],
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      },
     })
-    return c
-  }, [stats])
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [morning, evening])
 
-  const FILTERS = [
-    { id: 'all',          label: 'All',           count: totalDevotees },
-    { id: 'weekly',       label: '⭐ Weekly',      count: tierCounts['weekly'] },
-    { id: 'monthly',      label: '🙏 Monthly',     count: tierCounts['monthly'] },
-    { id: 'quarterly',    label: '🌤️ Quarterly',   count: tierCounts['quarterly'] },
-    { id: 'half-yearly',  label: '🌸 Half-Yearly', count: tierCounts['half-yearly'] },
-    { id: 'one-time',     label: '🌱 One-Time',    count: tierCounts['one-time'] },
+  return (
+    <div style={{ position: 'relative', width: '100%', height: 140 }}>
+      <canvas ref={canvasRef} role="img" aria-label={`Morning ${morning} Evening ${evening}`} />
+    </div>
+  )
+}
+
+function MiniLineChart({ data, labels, color = PURPLE, height = 140 }) {
+  const canvasRef = React.useRef(null)
+  const chartRef  = React.useRef(null)
+
+  React.useEffect(() => {
+    if (!canvasRef.current || !window.Chart) return
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null }
+    chartRef.current = new window.Chart(canvasRef.current, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          borderColor: color,
+          backgroundColor: color + '18',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointBackgroundColor: color,
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#6b7280' } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.05)' }, ticks: { font: { size: 10 }, color: '#6b7280', stepSize: 1 } },
+        },
+      },
+    })
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [JSON.stringify(data), JSON.stringify(labels), color])
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height }}>
+      <canvas ref={canvasRef} role="img" aria-label={`Line chart: ${labels.join(', ')}`} />
+    </div>
+  )
+}
+
+// ── Load Chart.js from CDN once ───────────────────────────────
+function useChartJs() {
+  const [ready, setReady] = React.useState(!!window.Chart)
+  React.useEffect(() => {
+    if (window.Chart) { setReady(true); return }
+    const s = document.createElement('script')
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js'
+    s.onload = () => setReady(true)
+    document.head.appendChild(s)
+  }, [])
+  return ready
+}
+
+// ── KPI Card ─────────────────────────────────────────────────
+function KPICard({ label, value, sub, color = BLUE }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.75)',
+      borderRadius: 14,
+      padding: '14px 16px',
+      border: '1px solid rgba(59,130,246,0.15)',
+      flex: '1 1 130px',
+    }}>
+      <div style={{ fontSize: 11, color: 'rgba(29,78,216,0.5)', fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 28, fontWeight: 900, color, fontFamily: "'Cinzel', serif",
+        lineHeight: 1 }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 11, color: 'rgba(29,78,216,0.4)', marginTop: 5 }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Section header ────────────────────────────────────────────
+function SectionTitle({ children }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(29,78,216,0.45)',
+      textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 10 }}>
+      {children}
+    </div>
+  )
+}
+
+// ── Card wrapper ──────────────────────────────────────────────
+function Card({ children, style = {} }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.75)',
+      borderRadius: 16,
+      padding: '16px',
+      border: '1px solid rgba(59,130,246,0.15)',
+      ...style,
+    }}>
+      {children}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════
+//  Main DashboardTab component
+// ════════════════════════════════════════════════════════════
+export default function DashboardTab({ bookings = [], satsangBookings = [] }) {
+  const chartReady = useChartJs()
+  const [page, setPage] = React.useState('exec') // exec | members | trends | upcoming
+  const today = getTodayStr()
+
+  // ── Derived analytics ─────────────────────────────────────
+  const analytics = React.useMemo(() => {
+    const total   = bookings.length
+    const morning = bookings.filter(b => b.time === 'Morning').length
+    const evening = bookings.filter(b => b.time === 'Evening').length
+
+    // Member map keyed by mobile
+    const memberMap = {}
+    bookings.forEach(b => {
+      const k = b.mobile || b.name
+      if (!memberMap[k]) memberMap[k] = { name: b.name, mobile: b.mobile || '', count: 0, dates: [] }
+      memberMap[k].count++
+      memberMap[k].dates.push(b.date)
+    })
+    const members = Object.values(memberMap).sort((a, b) => b.count - a.count)
+    const uniqueMembers = members.length
+    const avgPerMonth = (() => {
+      const months = new Set(bookings.map(b => (b.date || '').slice(0, 7)).filter(Boolean))
+      return months.size > 0 ? Math.round(total / months.size) : 0
+    })()
+
+    // Day of week counts (0=Sun…6=Sat)
+    const dayCounts = [0, 0, 0, 0, 0, 0, 0]
+    bookings.forEach(b => {
+      if (b.date) dayCounts[new Date(b.date + 'T00:00:00').getDay()]++
+    })
+
+    // Monthly counts — all months with data
+    const monthMap = {}
+    bookings.forEach(b => {
+      const m = (b.date || '').slice(0, 7)
+      if (m) monthMap[m] = (monthMap[m] || 0) + 1
+    })
+    const sortedMonths = Object.keys(monthMap).sort()
+    const monthLabels  = sortedMonths.map(m => {
+      const [, mm] = m.split('-')
+      return MONTH_SHORT[parseInt(mm, 10) - 1]
+    })
+    const monthData = sortedMonths.map(m => monthMap[m])
+
+    // Upcoming next 30 days
+    const in30 = new Date(today); in30.setDate(in30.getDate() + 30)
+    const in30Str = in30.toISOString().slice(0, 10)
+    const upcoming = bookings
+      .filter(b => b.date >= today && b.date <= in30Str)
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    return { total, morning, evening, uniqueMembers, avgPerMonth,
+      dayCounts, monthLabels, monthData, sortedMonths, members, upcoming }
+  }, [bookings, today])
+
+  const NAV = [
+    { id: 'exec',     label: '📊 Summary' },
+    { id: 'members',  label: '🪷 Members' },
+    { id: 'trends',   label: '📈 Trends' },
+    { id: 'upcoming', label: '🗓️ Upcoming' },
   ]
 
-  // ── Filter + sort ────────────────────────────────────────
-  const displayed = React.useMemo(() => {
-    let list = [...stats]
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(s => s.name.toLowerCase().includes(q) || s.mobile.includes(q))
-    }
-    if (filterBy !== 'all') {
-      list = list.filter(s => s.tier.label.toLowerCase() === filterBy)
-    }
-    if (sortBy === 'count')  list.sort((a, b) => b.total - a.total)
-    if (sortBy === 'recent') list.sort((a, b) => (b.lastDate || '').localeCompare(a.lastDate || ''))
-    if (sortBy === 'freq')   list.sort((a, b) => a.avgGap - b.avgGap)
-    if (sortBy === 'name')   list.sort((a, b) => a.name.localeCompare(b.name))
-    return list
-  }, [stats, search, filterBy, sortBy])
-
-  const copyMobile = (mob) => {
-    navigator.clipboard?.writeText(mob).then(() => {
-      setCopied(mob); setTimeout(() => setCopied(null), 2000)
-    })
-  }
-
-  const copyAll = () => {
-    const nums = displayed.map(s => s.mobile).join('\n')
-    navigator.clipboard?.writeText(nums).then(() => {
-      setCopied('__all__'); setTimeout(() => setCopied(null), 2500)
-    })
-  }
+  const navStyle = (id) => ({
+    flex: 1,
+    padding: '9px 4px',
+    border: 'none',
+    borderRadius: 12,
+    cursor: 'pointer',
+    fontFamily: "'Cinzel', serif",
+    fontSize: 11,
+    fontWeight: 800,
+    transition: 'all 0.18s',
+    background: page === id
+      ? 'linear-gradient(135deg, #1e3a8a, #3b82f6)'
+      : 'rgba(239,246,255,0.7)',
+    color: page === id ? '#fff' : 'rgba(29,78,216,0.55)',
+    boxShadow: page === id ? '0 3px 12px rgba(29,78,216,0.25)' : 'none',
+    letterSpacing: '0.3px',
+    whiteSpace: 'nowrap',
+  })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* Header */}
-      <div className="card" style={{ textAlign: 'center', padding: '20px 16px 16px' }}>
-        <div style={{ fontSize: 44, marginBottom: 6,
-          filter: 'drop-shadow(0 0 14px rgba(124,58,237,0.4))',
-          animation: 'floatEmoji 3s ease-in-out infinite alternate' }}>📊</div>
-        <div style={{ fontFamily: "'Cinzel',serif", color: '#1e3a8a', fontSize: 17, fontWeight: 800, marginBottom: 4 }}>
-          Devotee Dashboard
-        </div>
-        <div style={{ fontSize: 12, color: 'rgba(29,78,216,0.45)', lineHeight: 1.7 }}>
-          Booking frequency per devotee — weekly, monthly, quarterly 🙏
-        </div>
-        <div className="blue-line" style={{ marginTop: 14 }} />
-      </div>
-
-      {/* Summary stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-        {[
-          { label: 'Total Bookings', value: totalBookings,    icon: '📖', color: '#1d4ed8', bg: 'rgba(29,78,216,0.07)' },
-          { label: 'Devotees',       value: totalDevotees,    icon: '🙏', color: '#7c3aed', bg: 'rgba(124,58,237,0.07)' },
-          { label: 'Active This Mo', value: activeThisMonth,  icon: '🌸', color: '#16a34a', bg: 'rgba(22,163,74,0.07)' },
-        ].map(s => (
-          <div key={s.label} style={{ borderRadius: 14, padding: '14px 8px', textAlign: 'center',
-            background: s.bg, border: `1px solid ${s.color}22` }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: s.color, fontFamily: "'Cinzel',serif" }}>{s.value}</div>
-            <div style={{ fontSize: 10, color: s.color, fontWeight: 700, opacity: 0.7, marginTop: 2, lineHeight: 1.3 }}>{s.label}</div>
+      {/* ── Header ── */}
+      <Card>
+        <div style={{ textAlign: 'center', paddingBottom: 4 }}>
+          <div style={{ fontSize: 36, marginBottom: 6,
+            filter: 'drop-shadow(0 0 14px rgba(29,78,216,0.3))',
+            animation: 'floatEmoji 3s ease-in-out infinite alternate' }}>📊</div>
+          <div style={{ fontFamily: "'Cinzel', serif", color: '#1e3a8a',
+            fontSize: 17, fontWeight: 800 }}>
+            Devotee Analytics
           </div>
+          <div style={{ fontSize: 12, color: 'rgba(29,78,216,0.45)', marginTop: 4, lineHeight: 1.6 }}>
+            {bookings.length} prayer bookings · {analytics.uniqueMembers} unique devotees
+          </div>
+          <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(59,130,246,0.3),transparent)',
+            marginTop: 14 }} />
+        </div>
+      </Card>
+
+      {/* ── Nav tabs ── */}
+      <div style={{ display: 'flex', gap: 6, background: 'rgba(255,255,255,0.6)',
+        borderRadius: 14, padding: 5, border: '1px solid rgba(59,130,246,0.15)' }}>
+        {NAV.map(n => (
+          <button key={n.id} style={navStyle(n.id)} onClick={() => setPage(n.id)}>
+            {n.label}
+          </button>
         ))}
       </div>
 
-      {/* Frequency legend */}
-      <div className="card" style={{ padding: '12px 14px' }}>
-        <div style={{ fontSize: 11, color: 'rgba(29,78,216,0.5)', fontWeight: 700,
-          textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>
-          Booking Frequency Levels
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          {[
-            { icon: '⭐', label: 'Weekly',      color: '#7c3aed', desc: 'Books every ~1–2 weeks' },
-            { icon: '🙏', label: 'Monthly',     color: '#16a34a', desc: 'Books every ~3–4 weeks' },
-            { icon: '🌤️', label: 'Quarterly',   color: '#d97706', desc: 'Books every ~2–3 months' },
-            { icon: '🌸', label: 'Half-Yearly', color: '#3b82f6', desc: 'Books every ~4–6 months' },
-            { icon: '🌱', label: 'One-Time',    color: '#6b7280', desc: 'Booked only once so far' },
-          ].map(l => (
-            <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 14, width: 20, textAlign: 'center' }}>{l.icon}</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: l.color, minWidth: 80 }}>{l.label}</span>
-              <span style={{ fontSize: 11, color: '#6b7280' }}>{l.desc}</span>
+      {/* ════════ EXECUTIVE SUMMARY ════════ */}
+      {page === 'exec' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* KPI row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            <KPICard label="Total bookings"   value={analytics.total}         sub="all time"                  color={BLUE}   />
+            <KPICard label="Unique devotees"  value={analytics.uniqueMembers} sub="registered"               color={TEAL}   />
+            <KPICard label="Avg / month"      value={analytics.avgPerMonth}   sub="bookings per month"        color={PURPLE} />
+            <KPICard label="Upcoming"         value={analytics.upcoming.length} sub="next 30 days"             color={AMBER}  />
+          </div>
+
+          {/* Morning vs Evening */}
+          <Card>
+            <SectionTitle>Morning vs Evening</SectionTitle>
+            {chartReady
+              ? <MiniDoughnut morning={analytics.morning} evening={analytics.evening} />
+              : <div style={{ height: 140, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', color: 'rgba(29,78,216,0.3)', fontSize: 13 }}>Loading chart…</div>
+            }
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 20,
+              marginTop: 12, fontSize: 12 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2,
+                  background: '#1d4ed8', display: 'inline-block' }} />
+                <span style={{ color: '#1e3a8a', fontWeight: 700 }}>
+                  Morning — {analytics.morning} ({Math.round(analytics.morning / (analytics.total || 1) * 100)}%)
+                </span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2,
+                  background: '#d97706', display: 'inline-block' }} />
+                <span style={{ color: '#92400e', fontWeight: 700 }}>
+                  Evening — {analytics.evening} ({Math.round(analytics.evening / (analytics.total || 1) * 100)}%)
+                </span>
+              </span>
             </div>
-          ))}
-        </div>
-      </div>
+          </Card>
 
-      {/* Filter chips */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
-        {FILTERS.map(f => (
-          <button key={f.id} onClick={() => setFilterBy(f.id)}
-            style={{
-              flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
-              background: filterBy === f.id ? '#1d4ed8' : 'rgba(239,246,255,0.9)',
-              color: filterBy === f.id ? '#fff' : 'rgba(29,78,216,0.6)',
-              fontWeight: 700, fontSize: 12,
-              boxShadow: filterBy === f.id ? '0 3px 10px rgba(29,78,216,0.25)' : 'none',
-              transition: 'all 0.18s',
-            }}>
-            {f.label} <span style={{ opacity: 0.7, marginLeft: 3 }}>({f.count})</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search + Sort + Copy All */}
-      <div className="card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ position: 'relative' }}>
-          <input className="divine-input"
-            placeholder="🔍  Search by name or mobile..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            style={{ paddingLeft: 14, fontSize: 13 }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')}
-              style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', cursor: 'pointer', fontSize: 15,
-                color: 'rgba(29,78,216,0.4)' }}>✕</button>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-            {[['count','Most Booked'],['freq','Most Frequent'],['recent','Recent'],['name','A–Z']].map(([id, label]) => (
-              <button key={id} onClick={() => setSortBy(id)}
-                style={{
-                  flex: 1, padding: '6px 2px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  fontSize: 10, fontWeight: 700,
-                  background: sortBy === id ? 'rgba(29,78,216,0.1)' : 'rgba(239,246,255,0.8)',
-                  color: sortBy === id ? '#1d4ed8' : 'rgba(29,78,216,0.45)',
-                  borderBottom: sortBy === id ? '2px solid #1d4ed8' : '2px solid transparent',
-                }}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <button onClick={copyAll}
-            style={{
-              padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(29,78,216,0.2)',
-              background: copied === '__all__' ? '#d1fae5' : 'rgba(239,246,255,0.9)',
-              color: copied === '__all__' ? '#065f46' : '#1d4ed8',
-              fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
-              transition: 'all 0.2s',
-            }}>
-            {copied === '__all__' ? '✅ Copied!' : `📋 Copy All (${displayed.length})`}
-          </button>
-        </div>
-      </div>
-
-      {/* Devotee cards */}
-      {displayed.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px 0' }}>
-          <div style={{ fontSize: 36, marginBottom: 10, filter: 'saturate(0) brightness(2.2)' }}>🪷</div>
-          <div style={{ color: 'rgba(29,78,216,0.35)', fontSize: 13 }}>No devotees found</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {displayed.map((s, idx) => {
-            const { tier } = s
-            const pct     = Math.round((s.total / maxCount) * 100)
-            const isExp   = expanded === s.mobile
-
-            return (
-              <div key={s.mobile}
-                onClick={() => setExpanded(isExp ? null : s.mobile)}
-                style={{
-                  borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
-                  border: `1px solid ${tier.border}`,
-                  background: tier.bg,
-                  boxShadow: isExp ? '0 4px 18px rgba(29,78,216,0.12)' : 'none',
-                  transition: 'box-shadow 0.15s',
-                }}>
-
-                <div style={{ height: 3, background: `linear-gradient(90deg,${tier.color},${tier.color}44)` }} />
-
-                <div style={{ padding: '12px 14px' }}>
-                  {/* Row 1: rank + name + tier badge */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: 'rgba(29,78,216,0.3)',
-                      minWidth: 22, textAlign: 'center' }}>#{idx+1}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: "'Cinzel',serif", fontWeight: 800,
-                        color: '#1e3a8a', fontSize: 14, whiteSpace: 'nowrap',
-                        overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {s.name || '—'}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'rgba(29,78,216,0.4)', marginTop: 1 }}>
-                        📱 {s.mobile}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                      <span style={{
-                        fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 20,
-                        background: `${tier.color}18`, color: tier.color,
-                        border: `1px solid ${tier.color}44`, whiteSpace: 'nowrap',
-                      }}>
-                        {tier.icon} {tier.label}
-                      </span>
-                      <span style={{ fontSize: 18, fontWeight: 900, color: tier.color }}>
-                        {s.total}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div style={{ height: 5, borderRadius: 4, background: '#e5e7eb', overflow: 'hidden', marginBottom: 8 }}>
-                    <div style={{
-                      height: '100%', borderRadius: 4, width: `${pct}%`,
-                      background: `linear-gradient(90deg,${tier.color},${tier.color}88)`,
-                      transition: 'width 0.4s ease',
-                    }} />
-                  </div>
-
-                  {/* Row 2: mini stats */}
-                  <div style={{ display: 'flex', gap: 6, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {s.pCount > 0 && (
-                      <span style={{ background: 'rgba(29,78,216,0.07)', borderRadius: 8,
-                        padding: '2px 8px', fontWeight: 700, color: '#1d4ed8' }}>
-                        🙏 {s.pCount} Prayer
-                      </span>
-                    )}
-                    {s.sCount > 0 && (
-                      <span style={{ background: 'rgba(217,119,6,0.09)', borderRadius: 8,
-                        padding: '2px 8px', fontWeight: 700, color: '#d97706' }}>
-                        🪔 {s.sCount} Satsang
-                      </span>
-                    )}
-                    {s.total >= 2 && (
-                      <span style={{ marginLeft: 'auto', fontSize: 11,
-                        color: tier.color, fontWeight: 700 }}>
-                        ~{s.avgGap}d avg
-                      </span>
-                    )}
-                    {s.lastDate && (
-                      <span style={{ color: 'rgba(29,78,216,0.4)', fontWeight: 600, fontSize: 10 }}>
-                        Last: {formatDate(s.lastDate)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Expanded detail */}
-                  {isExp && (
-                    <div style={{ marginTop: 12, paddingTop: 12,
-                      borderTop: `1px solid ${tier.border}` }}
-                      onClick={e => e.stopPropagation()}>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
-                        {s.firstDate && (
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>
-                            📅 First booking: <strong>{formatDate(s.firstDate)}</strong>
-                          </div>
-                        )}
-                        {s.lastDate && (
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>
-                            📅 Last booking: <strong>{formatDate(s.lastDate)}</strong>
-                          </div>
-                        )}
-                        {s.total >= 2 && (
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>
-                            📊 Avg gap: <strong style={{ color: tier.color }}>{s.avgGap} days ({tier.short})</strong>
-                          </div>
-                        )}
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>
-                          📖 Total: <strong>{s.total} booking{s.total !== 1 ? 's' : ''}</strong>
-                          {s.pCount > 0 && s.sCount > 0 && (
-                            <span style={{ color: 'rgba(29,78,216,0.45)' }}> ({s.pCount} prayer · {s.sCount} satsang)</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          onClick={() => copyMobile(s.mobile)}
-                          style={{
-                            flex: 1, padding: '10px', border: 'none', borderRadius: 10,
-                            background: copied === s.mobile ? '#d1fae5' : 'rgba(29,78,216,0.08)',
-                            color: copied === s.mobile ? '#065f46' : '#1d4ed8',
-                            fontWeight: 700, fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
-                          }}>
-                          {copied === s.mobile ? '✅ Copied!' : '📋 Copy Mobile'}
-                        </button>
-                        <a href={`https://wa.me/91${s.mobile}`}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{
-                            flex: 1, padding: '10px', borderRadius: 10, textDecoration: 'none',
-                            background: 'linear-gradient(135deg,rgba(37,211,102,0.15),rgba(18,140,126,0.1))',
-                            color: '#128C7E', fontWeight: 700, fontSize: 12,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                            border: '1px solid rgba(37,211,102,0.3)',
-                          }}>
-                          💬 WhatsApp
-                        </a>
-                      </div>
-                    </div>
-                  )}
+          {/* Day of week */}
+          <Card>
+            <SectionTitle>Bookings by day of week</SectionTitle>
+            {chartReady
+              ? <MiniBarChart
+                  data={analytics.dayCounts}
+                  labels={['Sun','Mon','Tue','Wed','Thu','Fri','Sat']}
+                  color={TEAL}
+                  height={120}
+                />
+              : <div style={{ height: 120, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', color: 'rgba(29,78,216,0.3)', fontSize: 13 }}>Loading…</div>
+            }
+            {(() => {
+              const max = Math.max(...analytics.dayCounts)
+              const peak = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][analytics.dayCounts.indexOf(max)]
+              return (
+                <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(29,78,216,0.6)',
+                  textAlign: 'center', fontWeight: 600 }}>
+                  🏆 Busiest day: <span style={{ color: BLUE, fontWeight: 800 }}>{peak}</span> ({max} bookings)
                 </div>
-              </div>
-            )
-          })}
+              )
+            })()}
+          </Card>
+
         </div>
       )}
 
-      <div style={{ textAlign: 'center', fontSize: 11, color: 'rgba(29,78,216,0.35)',
-        padding: '8px 0 4px', lineHeight: 1.7 }}>
-        Tap any card to expand · Frequency based on avg gap between bookings 🙏
+      {/* ════════ MEMBER ANALYTICS ════════ */}
+      {page === 'members' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <Card>
+            <SectionTitle>Top active devotees</SectionTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {analytics.members.slice(0, 20).map((m, i) => {
+                const ci  = i % AVATAR_BG.length
+                const pct = Math.round(m.count / (analytics.members[0]?.count || 1) * 100)
+                return (
+                  <div key={m.mobile + m.name + i} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 0',
+                    borderBottom: i < Math.min(analytics.members.length - 1, 19)
+                      ? '1px solid rgba(59,130,246,0.08)' : 'none',
+                  }}>
+                    {/* Rank */}
+                    <div style={{ width: 20, fontSize: 11, fontWeight: 800,
+                      color: i < 3 ? '#d97706' : 'rgba(29,78,216,0.35)',
+                      textAlign: 'center', flexShrink: 0 }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                    </div>
+                    {/* Avatar */}
+                    <div style={{
+                      width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                      background: AVATAR_BG[ci], color: AVATAR_TEXT[ci],
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 800,
+                    }}>
+                      {initials(m.name)}
+                    </div>
+                    {/* Name + mobile */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'Cinzel', serif", fontWeight: 700,
+                        color: '#1e3a8a', fontSize: 13, whiteSpace: 'nowrap',
+                        overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {m.name}
+                      </div>
+                      {m.mobile && (
+                        <div style={{ fontSize: 11, color: 'rgba(29,78,216,0.4)', marginTop: 2 }}>
+                          📱 {m.mobile}
+                        </div>
+                      )}
+                    </div>
+                    {/* Bar */}
+                    <div style={{ width: 80, flexShrink: 0 }}>
+                      <div style={{ height: 5, borderRadius: 3,
+                        background: 'rgba(59,130,246,0.1)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: 3,
+                          width: pct + '%', background: AVATAR_BG[ci],
+                          transition: 'width 0.5s ease' }} />
+                      </div>
+                    </div>
+                    {/* Count */}
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#1e3a8a',
+                      minWidth: 28, textAlign: 'right', flexShrink: 0 }}>
+                      {m.count}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+
+          {/* Stats summary */}
+          <Card>
+            <SectionTitle>Devotee stats</SectionTitle>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {[
+                { label: 'Total devotees', value: analytics.uniqueMembers },
+                { label: 'Most bookings', value: analytics.members[0]?.count ?? 0,
+                  sub: analytics.members[0]?.name },
+                { label: 'Avg per devotee', value: analytics.uniqueMembers
+                    ? Math.round(analytics.total / analytics.uniqueMembers * 10) / 10 : 0 },
+                { label: '5+ bookings', value: analytics.members.filter(m => m.count >= 5).length,
+                  sub: 'core devotees' },
+              ].map(s => (
+                <div key={s.label} style={{
+                  flex: '1 1 120px', padding: '12px', borderRadius: 12,
+                  background: 'rgba(239,246,255,0.7)', border: '1px solid rgba(59,130,246,0.12)',
+                }}>
+                  <div style={{ fontSize: 10, color: 'rgba(29,78,216,0.45)', fontWeight: 700,
+                    textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 6 }}>
+                    {s.label}
+                  </div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: BLUE,
+                    fontFamily: "'Cinzel', serif" }}>
+                    {s.value}
+                  </div>
+                  {s.sub && (
+                    <div style={{ fontSize: 10, color: 'rgba(29,78,216,0.4)', marginTop: 4,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {s.sub}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+        </div>
+      )}
+
+      {/* ════════ MONTHLY TRENDS ════════ */}
+      {page === 'trends' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <Card>
+            <SectionTitle>Monthly booking trend</SectionTitle>
+            {chartReady && analytics.monthData.length > 0
+              ? <MiniLineChart
+                  data={analytics.monthData}
+                  labels={analytics.monthLabels}
+                  color={PURPLE}
+                  height={180}
+                />
+              : <div style={{ height: 180, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', color: 'rgba(29,78,216,0.3)', fontSize: 13 }}>
+                  {chartReady ? 'No data yet' : 'Loading chart…'}
+                </div>
+            }
+            {analytics.monthData.length > 0 && (() => {
+              const max = Math.max(...analytics.monthData)
+              const peakIdx = analytics.monthData.indexOf(max)
+              return (
+                <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(29,78,216,0.6)',
+                  textAlign: 'center', fontWeight: 600 }}>
+                  🏆 Peak month: <span style={{ color: PURPLE, fontWeight: 800 }}>
+                    {analytics.monthLabels[peakIdx]}</span> ({max} bookings)
+                </div>
+              )
+            })()}
+          </Card>
+
+          {/* Per month breakdown table */}
+          <Card>
+            <SectionTitle>Month-by-month breakdown</SectionTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {analytics.sortedMonths.map((m, i) => {
+                const count = analytics.monthData[i]
+                const maxC  = Math.max(...analytics.monthData) || 1
+                const pct   = Math.round(count / maxC * 100)
+                const [yr, mm] = m.split('-')
+                const label = `${MONTH_SHORT[parseInt(mm, 10) - 1]} ${yr}`
+                return (
+                  <div key={m} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 0',
+                    borderBottom: i < analytics.sortedMonths.length - 1
+                      ? '1px solid rgba(59,130,246,0.07)' : 'none',
+                  }}>
+                    <div style={{ width: 62, fontSize: 12, fontWeight: 700,
+                      color: '#1e3a8a', flexShrink: 0, fontFamily: "'Cinzel', serif",
+                      fontSize: 11 }}>
+                      {label}
+                    </div>
+                    <div style={{ flex: 1, height: 6, borderRadius: 3,
+                      background: 'rgba(109,40,217,0.1)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 3,
+                        width: pct + '%', background: PURPLE + 'bb',
+                        transition: 'width 0.4s ease' }} />
+                    </div>
+                    <div style={{ width: 28, fontSize: 13, fontWeight: 900,
+                      color: PURPLE, textAlign: 'right', flexShrink: 0 }}>
+                      {count}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+
+        </div>
+      )}
+
+      {/* ════════ UPCOMING ════════ */}
+      {page === 'upcoming' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <Card>
+            <SectionTitle>Next 30 days — {analytics.upcoming.length} bookings</SectionTitle>
+            {analytics.upcoming.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px 0',
+                color: 'rgba(29,78,216,0.3)', fontSize: 13 }}>
+                No upcoming bookings in the next 30 days 🙏
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {analytics.upcoming.map((b, i) => {
+                  const d   = new Date(b.date + 'T00:00:00')
+                  const day = d.getDate()
+                  const mon = MONTH_SHORT[d.getMonth()]
+                  const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]
+                  const isToday = b.date === today
+                  const isMorning = b.time === 'Morning'
+                  return (
+                    <div key={b.id || b.date + b.name + i} style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '11px 0',
+                      borderBottom: i < analytics.upcoming.length - 1
+                        ? '1px solid rgba(59,130,246,0.08)' : 'none',
+                    }}>
+                      {/* Date box */}
+                      <div style={{
+                        background: isToday
+                          ? 'linear-gradient(135deg,#1d4ed8,#3b82f6)'
+                          : 'rgba(239,246,255,0.9)',
+                        borderRadius: 12, padding: '7px 10px',
+                        textAlign: 'center', minWidth: 48, flexShrink: 0,
+                        border: isToday ? 'none' : '1px solid rgba(59,130,246,0.15)',
+                      }}>
+                        <div style={{ fontSize: 18, fontWeight: 900, lineHeight: 1,
+                          color: isToday ? '#fff' : '#1e3a8a',
+                          fontFamily: "'Cinzel', serif" }}>
+                          {day}
+                        </div>
+                        <div style={{ fontSize: 9, marginTop: 2, fontWeight: 700,
+                          color: isToday ? 'rgba(255,255,255,0.8)' : 'rgba(29,78,216,0.5)',
+                          letterSpacing: '0.5px' }}>
+                          {mon}
+                        </div>
+                      </div>
+                      {/* Name + details */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Cinzel', serif", fontWeight: 700,
+                          color: '#1e3a8a', fontSize: 13,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {b.name}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'rgba(29,78,216,0.45)',
+                          marginTop: 2 }}>
+                          {dow}{isToday ? ' · Today' : ''}
+                        </div>
+                      </div>
+                      {/* Slot badge */}
+                      <span style={{
+                        fontSize: 11, padding: '3px 9px', borderRadius: 20, fontWeight: 700,
+                        flexShrink: 0,
+                        background: isMorning ? '#dbeafe' : '#fef3c7',
+                        color: isMorning ? '#1d4ed8' : '#92400e',
+                      }}>
+                        {isMorning ? '🌅' : '🌙'} {b.time}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+
+          {/* Upcoming by month summary */}
+          {(() => {
+            const monthBuckets = {}
+            analytics.upcoming.forEach(b => {
+              const m = (b.date || '').slice(0, 7)
+              if (!monthBuckets[m]) monthBuckets[m] = 0
+              monthBuckets[m]++
+            })
+            const bucketKeys = Object.keys(monthBuckets).sort()
+            if (bucketKeys.length <= 1) return null
+            return (
+              <Card>
+                <SectionTitle>Upcoming by month</SectionTitle>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {bucketKeys.map(m => {
+                    const [yr, mm] = m.split('-')
+                    return (
+                      <div key={m} style={{
+                        padding: '8px 14px', borderRadius: 12,
+                        background: 'rgba(239,246,255,0.9)',
+                        border: '1px solid rgba(59,130,246,0.15)',
+                        textAlign: 'center',
+                      }}>
+                        <div style={{ fontSize: 11, color: 'rgba(29,78,216,0.5)',
+                          fontWeight: 700, fontFamily: "'Cinzel', serif" }}>
+                          {MONTH_SHORT[parseInt(mm, 10) - 1]}
+                        </div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: BLUE,
+                          fontFamily: "'Cinzel', serif" }}>
+                          {monthBuckets[m]}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Card>
+            )
+          })()}
+
+        </div>
+      )}
+
+      {/* Footer ornament */}
+      <div style={{ textAlign: 'center', padding: '10px 0 6px',
+        color: 'rgba(29,78,216,0.25)', fontSize: 11, letterSpacing: 8 }}>
+        ✦ ✦ ✦
       </div>
+
     </div>
   )
 }
