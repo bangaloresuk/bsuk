@@ -2,9 +2,7 @@ import React from 'react'
 import { ADMIN_CONFIG } from '../../config/adminConfig.js'
 
 // ── Step 1: Ask GAS to generate + email the OTP ─────────────
-// GAS will reject the request if the email is not in ADMIN_EMAILS.
-// No email list is stored in the frontend.
-async function sendOtpViaGas(email) {
+async function sendOtpViaGas() {
   const url = ADMIN_CONFIG.gasScriptUrl
   if (!url || url === 'YOUR_GAS_SCRIPT_URL_HERE') {
     throw new Error('GAS script URL not configured in adminConfig.js')
@@ -14,7 +12,7 @@ async function sendOtpViaGas(email) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       action: 'sendAdminOtp',
-      email,
+      email:  ADMIN_CONFIG.adminEmail,
     }),
   })
   const data = await res.json()
@@ -22,30 +20,29 @@ async function sendOtpViaGas(email) {
 }
 
 // ── Step 2: Ask GAS to verify the OTP the user typed ────────
-async function verifyOtpViaGas(email, otp) {
+async function verifyOtpViaGas(otp) {
   const url = ADMIN_CONFIG.gasScriptUrl
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       action: 'verifyAdminOtp',
-      email,
-      otp: otp.trim(),
+      email:  ADMIN_CONFIG.adminEmail,
+      otp:    otp.trim(),
     }),
   })
   const data = await res.json()
   if (!data.success) throw new Error(data.message || 'Invalid OTP')
 }
 
+// ── FIXED: Added 'export default' here so AppShell.jsx can import it properly ──
 export default function SignIn({ onSignIn }) {
-  const [step, setStep]       = React.useState('form')   // 'form' | 'otp'
-  const [email, setEmail]     = React.useState('')
-  const [otp, setOtp]         = React.useState('')
-  const [error, setError]     = React.useState('')
-  const [shake, setShake]     = React.useState(false)
+  const [step, setStep]     = React.useState('form')   // 'form' | 'otp'
+  const [email, setEmail]   = React.useState('')
+  const [otp, setOtp]       = React.useState('')
+  const [error, setError]   = React.useState('')
+  const [shake, setShake]   = React.useState(false)
   const [sending, setSending] = React.useState(false)
-
-  const trimmedEmail = email.trim().toLowerCase()
 
   const triggerError = (msg) => {
     setError(msg); setShake(true)
@@ -54,20 +51,25 @@ export default function SignIn({ onSignIn }) {
 
   // ── Send OTP ─────────────────────────────────────────────
   const handleSendOtp = async () => {
-    if (!trimmedEmail) { triggerError('⚠️ Please enter your email address.'); return }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    const trimmed = email.trim().toLowerCase()
+    if (!trimmed) { triggerError('⚠️ Please enter your email address.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       triggerError('⚠️ Please enter a valid email address.'); return
+    }
+    if (trimmed !== ADMIN_CONFIG.adminEmail.toLowerCase()) {
+      triggerError('🚫 Access restricted. Only the configured admin email can sign in.')
+      return
     }
     setError('')
     setSending(true)
     try {
-      await sendOtpViaGas(trimmedEmail)
+      await sendOtpViaGas()
       setSending(false)
       setStep('otp')
     } catch (err) {
       setSending(false)
-      // GAS returns "Unauthorized email." if not in ADMIN_EMAILS
-      triggerError('❌ ' + err.message)
+      triggerError('❌ Could not send OTP: ' + err.message)
+      console.error('[BSUK Admin OTP error]', err)
     }
   }
 
@@ -77,10 +79,10 @@ export default function SignIn({ onSignIn }) {
     setError('')
     setSending(true)
     try {
-      await verifyOtpViaGas(trimmedEmail, otp)
+      await verifyOtpViaGas(otp)
       const user = {
         name: 'Admin',
-        email: trimmedEmail,
+        email: ADMIN_CONFIG.adminEmail,
         isAdmin: true,
         signedInAt: Date.now(),
       }
@@ -98,7 +100,7 @@ export default function SignIn({ onSignIn }) {
     setError('')
     setSending(true)
     try {
-      await sendOtpViaGas(trimmedEmail)
+      await sendOtpViaGas()
       setSending(false)
     } catch (err) {
       setSending(false)
@@ -171,7 +173,7 @@ export default function SignIn({ onSignIn }) {
               <label className="divine-label">📧 Admin Gmail Address</label>
               <input
                 className="divine-input"
-                placeholder="Enter your Gmail address"
+                placeholder="bangaloresuk@gmail.com"
                 type="email"
                 value={email}
                 onChange={e => { setError(''); setEmail(e.target.value) }}
@@ -203,7 +205,7 @@ export default function SignIn({ onSignIn }) {
 
             <div style={{ textAlign: 'center', fontSize: 11, color: 'rgba(29,78,216,0.4)', lineHeight: 1.6 }}>
               OTP will be sent to your Gmail via the booking system.<br/>
-              Only authorised admin emails can access this area.
+              Only the configured admin email can access this area.
             </div>
           </div>
         )}
@@ -217,7 +219,7 @@ export default function SignIn({ onSignIn }) {
               background: 'rgba(209,250,229,0.9)', border: '1px solid rgba(110,231,183,0.6)',
               fontSize: 13, color: '#065f46', textAlign: 'center', lineHeight: 1.7,
             }}>
-              📬 OTP sent to <strong>{trimmedEmail}</strong><br/>
+              📬 OTP sent to <strong>{email.trim()}</strong><br/>
               <span style={{ fontSize: 11, color: 'rgba(6,95,70,0.6)' }}>
                 Check your Gmail inbox (also check Spam)
               </span>
