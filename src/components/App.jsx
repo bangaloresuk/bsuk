@@ -2505,6 +2505,25 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                                           : <>📍 {b.place}</>}
                                       </div>
                                     )}
+                                    {currentUser && (
+                                      <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10,
+                                        background:"rgba(29,78,216,0.05)", border:"1px solid rgba(29,78,216,0.1)" }}>
+                                        <div style={{ fontSize:11, color:"#1d4ed8", fontWeight:700, marginBottom:4,
+                                          textTransform:"uppercase", letterSpacing:"0.8px" }}>🔐 Admin Info</div>
+                                        <div style={{ fontSize:12, color:"#374151", fontWeight:600 }}>📱 {b.mobile}</div>
+                                        <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🪪 {b.id}</div>
+                                        {b.bookedAt && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕒 {b.bookedAt}</div>}
+                                        <button
+                                          disabled={cancelling === b.id}
+                                          onClick={() => handleCancelBooking(b.id)}
+                                          style={{ marginTop:8, width:"100%", padding:"7px", border:"none", borderRadius:8,
+                                            background:"linear-gradient(135deg,#dc2626,#ef4444)",
+                                            color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
+                                            opacity: cancelling===b.id ? 0.6 : 1 }}>
+                                          {cancelling===b.id ? "⏳ Cancelling..." : "🗑️ Cancel Booking"}
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -2551,6 +2570,25 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                                     <div style={{ fontSize:12, color:"#d97706",
                                       fontWeight:600, marginTop:3 }}>
                                       🪔 {b.occasion}
+                                    </div>
+                                  )}
+                                  {currentUser && (
+                                    <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10,
+                                      background:"rgba(217,119,6,0.07)", border:"1px solid rgba(217,119,6,0.18)" }}>
+                                      <div style={{ fontSize:11, color:"#92400e", fontWeight:700, marginBottom:4,
+                                        textTransform:"uppercase", letterSpacing:"0.8px" }}>🔐 Admin Info</div>
+                                      <div style={{ fontSize:12, color:"#374151", fontWeight:600 }}>📱 {b.mobile}</div>
+                                      <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🪪 {b.id}</div>
+                                      {b.bookedAt && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕒 {b.bookedAt}</div>}
+                                      <button
+                                        disabled={cancelling === b.id}
+                                        onClick={() => handleCancelSatsang(b.id)}
+                                        style={{ marginTop:8, width:"100%", padding:"7px", border:"none", borderRadius:8,
+                                          background:"linear-gradient(135deg,#92400e,#d97706)",
+                                          color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
+                                          opacity: cancelling===b.id ? 0.6 : 1 }}>
+                                        {cancelling===b.id ? "⏳ Cancelling..." : "🗑️ Cancel Satsang"}
+                                      </button>
                                     </div>
                                   )}
                                 </div>
@@ -2625,6 +2663,16 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                                         {b.place && (
                                           <div style={{ fontSize:12, color:"#9ca3af" }}>📍 {b.place}</div>
                                         )}
+                                        {currentUser && (
+                                          <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10,
+                                            background:"rgba(107,114,128,0.08)", border:"1px solid rgba(107,114,128,0.15)" }}>
+                                            <div style={{ fontSize:11, color:"#6b7280", fontWeight:700, marginBottom:4,
+                                              textTransform:"uppercase", letterSpacing:"0.8px" }}>🔐 Admin Info</div>
+                                            <div style={{ fontSize:12, color:"#374151", fontWeight:600 }}>📱 {b.mobile}</div>
+                                            <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🪪 {b.id}</div>
+                                            {b.bookedAt && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕒 {b.bookedAt}</div>}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -2651,6 +2699,16 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                                       </div>
                                       {b.venue && <div style={{ fontSize:12, color:"#9ca3af" }}>📍 {b.venue}</div>}
                                       {b.hostedBy && <div style={{ fontSize:12, color:"#9ca3af", fontWeight:600, marginTop:3 }}>🙏 {b.hostedBy}</div>}
+                                      {currentUser && (
+                                        <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10,
+                                          background:"rgba(107,114,128,0.08)", border:"1px solid rgba(107,114,128,0.15)" }}>
+                                          <div style={{ fontSize:11, color:"#6b7280", fontWeight:700, marginBottom:4,
+                                            textTransform:"uppercase", letterSpacing:"0.8px" }}>🔐 Admin Info</div>
+                                          <div style={{ fontSize:12, color:"#374151", fontWeight:600 }}>📱 {b.mobile}</div>
+                                          <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🪪 {b.id}</div>
+                                          {b.bookedAt && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕒 {b.bookedAt}</div>}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );
