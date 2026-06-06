@@ -17,9 +17,9 @@ function WelcomeScreen({ onSelect, currentUser, onSignOut }) {
 
   return (
     <div style={{
-      minHeight:"100vh", display:"flex", flexDirection:"column", position:"relative",
+      minHeight:"100vh", display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"center",
-      padding:"32px 16px", position:"relative", zIndex:10,
+      padding:"32px 16px", position:"relative", zIndex:10, // FIXED: Removed duplicate position:"relative" from here
     }}>
 
       {/* Lotus */}
@@ -138,10 +138,5 @@ function WelcomeScreen({ onSelect, currentUser, onSignOut }) {
     </div>
   );
 }
-
-
-// ============================================================
-//  APP SHELL — manages SUK selection + renders App
-// ============================================================
 
 export default WelcomeScreen

@@ -30,4 +30,5 @@ export const satsangApi = {
 export const photoApi = {
   getAll:  ()                           => db.photos.getAll(),
   upload:  (base64, filename, caption, uploader) => db.photos.upload(base64, filename, caption, uploader),
+  delete:  (photoId)                    => db.photos.delete(photoId),
 }

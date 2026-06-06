@@ -20,6 +20,8 @@ export default function GalleryTab({
   photoMsg, setPhotoMsg,
   photoUploading,
   onUpload,
+  isAdmin,
+  onDeletePhoto,
 }) {
 
   // ── Lightbox state ─────────────────────────────────────────
@@ -226,6 +228,23 @@ export default function GalleryTab({
               }}>
               <span style={{ fontSize: 18 }}>💬</span> Share on WhatsApp
             </button>
+
+            {/* Delete button inside lightbox — admin only */}
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  onDeletePhoto && onDeletePhoto(activeLightboxPhoto.id);
+                  closeLightbox();
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  padding: '10px 24px', borderRadius: 24, border: '1px solid rgba(220,38,38,0.5)',
+                  background: 'rgba(220,38,38,0.15)',
+                  color: '#fca5a5', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                }}>
+                🗑️ Delete Photo
+              </button>
+            )}
           </div>
 
           {/* Next arrow */}
@@ -434,6 +453,26 @@ export default function GalleryTab({
                 >
                   <span style={{ fontSize: 14 }}>💬</span> Share
                 </button>
+
+                {/* Delete button — admin only */}
+                {isAdmin && (
+                  <button
+                    onClick={() => onDeletePhoto && onDeletePhoto(p.id)}
+                    style={{
+                      padding: '8px', border: 'none',
+                      borderTop: '1px solid rgba(220,38,38,0.12)',
+                      background: 'rgba(254,242,242,0.7)',
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      gap: 5, fontSize: 11, fontWeight: 700,
+                      color: '#b91c1c', transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,0.15)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(254,242,242,0.7)'}
+                  >
+                    🗑️ Delete
+                  </button>
+                )}
               </div>
             ))}
           </div>

@@ -540,8 +540,22 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
 
   React.useEffect(() => { fetchPhotos(); }, [fetchPhotos]);
 
-  const handlePhotoUpload = async () => {
-    if (!photoUpload.file) { setPhotoMsg("⚠️ Please select a photo first."); return; }
+  const handleDeletePhoto = async (photoId) => {
+    if (!window.confirm('Are you sure you want to delete this photo?')) return;
+    try {
+      const res = await photoApi.delete(photoId);
+      if (res.success) {
+        setPhotos(prev => prev.filter(p => p.id !== photoId));
+        setPhotoMsg('✅ Photo deleted.');
+      } else {
+        setPhotoMsg('⚠️ ' + (res.message || 'Delete failed.'));
+      }
+    } catch (e) {
+      setPhotoMsg('⚠️ Delete failed. Please try again.');
+    }
+  };
+
+  const handlePhotoUpload = async () => {    if (!photoUpload.file) { setPhotoMsg("⚠️ Please select a photo first."); return; }
     if (!photoUpload.uploader.trim()) { setPhotoMsg("⚠️ Please enter your name before uploading."); return; }
     if (!isConfigured)     { setPhotoMsg("⚠️ Script URL not configured."); return; }
     setPhotoUploading(true); setPhotoMsg("");
@@ -2359,7 +2373,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                     const active = typeTab === t.id;
                     return (
                       <button key={t.id} onClick={() => setTypeTab(t.id)}
-                        style={{ padding:"9px 0", borderRadius:12, border:"none",
+                        style={{ padding:"9px 0", borderRadius:12,
                           cursor:"pointer", fontFamily:"'Cinzel',serif",
                           fontSize:12, fontWeight:800, transition:"all 0.18s",
                           background: active
@@ -2824,6 +2838,8 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           setPhotoMsg={setPhotoMsg}
           photoUploading={photoUploading}
           onUpload={handlePhotoUpload}
+          isAdmin={!!currentUser}
+          onDeletePhoto={handleDeletePhoto}
         />
       )}
 

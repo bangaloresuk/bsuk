@@ -12,7 +12,7 @@ export const ADMIN_CONFIG = {
 
   // ← Your deployed GAS Script URL (same URL used for bookings)
   // e.g. 'https://script.google.com/macros/s/AKfycb.../exec'
-  gasScriptUrl: 'YOUR_GAS_SCRIPT_URL_HERE',
+  gasScriptUrl: 'https://bangaloresuk-proxy.bangaloresuk.workers.dev',
 
   // Display name
   appName: 'BSUK Admin',

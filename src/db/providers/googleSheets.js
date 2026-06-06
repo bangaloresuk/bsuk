@@ -139,5 +139,11 @@ export const googleSheetsProvider = {
           reject(err)
         }
       }),
+
+    delete: (photoId) =>
+      gasPost({ action: 'deletePhoto', photoId }).then(result => {
+        localBust(makeCacheKey('getPhotos', SHEET.PHOTOS))
+        return result
+      }),
   },
 }

@@ -1,16 +1,8 @@
-// ============================================================
-//  SignIn — Admin-only Gmail OTP sign-in via GAS
-//  ─────────────────────────────────────────────────────────
-//  • App is PUBLIC — this is only for admin access
-//  • OTP is emailed via your existing GAS script
-//  • Configure adminEmail + gasScriptUrl in adminConfig.js
-// ============================================================
-
 import React from 'react'
 import { ADMIN_CONFIG } from '../../config/adminConfig.js'
 
-// ── Send OTP via GAS (uses your existing script + API key) ───
-async function sendOtpViaGas(otp) {
+// ── Step 1: Ask GAS to generate + email the OTP ─────────────
+async function sendOtpViaGas() {
   const url = ADMIN_CONFIG.gasScriptUrl
   if (!url || url === 'YOUR_GAS_SCRIPT_URL_HERE') {
     throw new Error('GAS script URL not configured in adminConfig.js')
@@ -19,23 +11,37 @@ async function sendOtpViaGas(otp) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      action:  'sendAdminOtp',
-      apiKey:  ADMIN_CONFIG.gasApiKey || '',
-      otp,
-      email:   ADMIN_CONFIG.adminEmail,
+      action: 'sendAdminOtp',
+      email:  ADMIN_CONFIG.adminEmail,
     }),
   })
   const data = await res.json()
   if (!data.success) throw new Error(data.message || 'Failed to send OTP')
 }
 
-function SignIn({ onSignIn }) {
-  const [step, setStep]       = React.useState('form')   // 'form' | 'otp'
-  const [email, setEmail]     = React.useState('')
-  const [otp, setOtp]         = React.useState('')
-  const [sentOtp, setSentOtp] = React.useState('')
-  const [error, setError]     = React.useState('')
-  const [shake, setShake]     = React.useState(false)
+// ── Step 2: Ask GAS to verify the OTP the user typed ────────
+async function verifyOtpViaGas(otp) {
+  const url = ADMIN_CONFIG.gasScriptUrl
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'verifyAdminOtp',
+      email:  ADMIN_CONFIG.adminEmail,
+      otp:    otp.trim(),
+    }),
+  })
+  const data = await res.json()
+  if (!data.success) throw new Error(data.message || 'Invalid OTP')
+}
+
+// ── FIXED: Added 'export default' here so AppShell.jsx can import it properly ──
+export default function SignIn({ onSignIn }) {
+  const [step, setStep]     = React.useState('form')   // 'form' | 'otp'
+  const [email, setEmail]   = React.useState('')
+  const [otp, setOtp]       = React.useState('')
+  const [error, setError]   = React.useState('')
+  const [shake, setShake]   = React.useState(false)
   const [sending, setSending] = React.useState(false)
 
   const triggerError = (msg) => {
@@ -43,6 +49,7 @@ function SignIn({ onSignIn }) {
     setTimeout(() => setShake(false), 500)
   }
 
+  // ── Send OTP ─────────────────────────────────────────────
   const handleSendOtp = async () => {
     const trimmed = email.trim().toLowerCase()
     if (!trimmed) { triggerError('⚠️ Please enter your email address.'); return }
@@ -55,10 +62,8 @@ function SignIn({ onSignIn }) {
     }
     setError('')
     setSending(true)
-    const code = String(Math.floor(100000 + Math.random() * 900000))
-    setSentOtp(code)
     try {
-      await sendOtpViaGas(code)
+      await sendOtpViaGas()
       setSending(false)
       setStep('otp')
     } catch (err) {
@@ -68,24 +73,34 @@ function SignIn({ onSignIn }) {
     }
   }
 
-  const handleVerifyOtp = () => {
-    if (otp.trim() !== sentOtp) {
-      triggerError('❌ Incorrect OTP. Please try again.')
-      return
+  // ── Verify OTP ───────────────────────────────────────────
+  const handleVerifyOtp = async () => {
+    if (otp.trim().length < 6) { triggerError('⚠️ Please enter the 6-digit OTP.'); return }
+    setError('')
+    setSending(true)
+    try {
+      await verifyOtpViaGas(otp)
+      const user = {
+        name: 'Admin',
+        email: ADMIN_CONFIG.adminEmail,
+        isAdmin: true,
+        signedInAt: Date.now(),
+      }
+      try { sessionStorage.setItem('bsukUser', JSON.stringify(user)) } catch(e) {}
+      onSignIn(user)
+    } catch (err) {
+      setSending(false)
+      triggerError('❌ ' + err.message)
     }
-    const user = { name: 'Admin', email: email.trim().toLowerCase(), isAdmin: true, signedInAt: Date.now() }
-    try { sessionStorage.setItem('bsukUser', JSON.stringify(user)) } catch(e) {}
-    onSignIn(user)
   }
 
+  // ── Resend OTP ───────────────────────────────────────────
   const handleResend = async () => {
     setOtp('')
     setError('')
     setSending(true)
-    const code = String(Math.floor(100000 + Math.random() * 900000))
-    setSentOtp(code)
     try {
-      await sendOtpViaGas(code)
+      await sendOtpViaGas()
       setSending(false)
     } catch (err) {
       setSending(false)
@@ -232,19 +247,20 @@ function SignIn({ onSignIn }) {
 
             <button
               onClick={handleVerifyOtp}
-              disabled={otp.length < 6}
+              disabled={otp.length < 6 || sending}
               style={{
                 width: '100%', padding: '15px', border: 'none', borderRadius: 13,
-                background: otp.length === 6
+                background: otp.length === 6 && !sending
                   ? 'linear-gradient(135deg,#1d4ed8 0%,#3b82f6 50%,#60a5fa 100%)'
                   : 'rgba(200,210,230,0.5)',
-                color: otp.length === 6 ? '#fff' : '#aaa',
-                fontWeight: 900, fontSize: 16, cursor: otp.length === 6 ? 'pointer' : 'not-allowed',
+                color: otp.length === 6 && !sending ? '#fff' : '#aaa',
+                fontWeight: 900, fontSize: 16,
+                cursor: otp.length === 6 && !sending ? 'pointer' : 'not-allowed',
                 fontFamily: "'Cinzel',serif", letterSpacing: '0.5px',
-                boxShadow: otp.length === 6 ? '0 5px 22px rgba(29,78,216,0.35)' : 'none',
+                boxShadow: otp.length === 6 && !sending ? '0 5px 22px rgba(29,78,216,0.35)' : 'none',
                 transition: 'all 0.3s',
               }}>
-              ✅ Verify & Sign In
+              {sending ? '⏳ Verifying...' : '✅ Verify & Sign In'}
             </button>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
@@ -259,7 +275,7 @@ function SignIn({ onSignIn }) {
                 {sending ? '⏳ Resending...' : '🔄 Resend OTP'}
               </button>
               <span style={{ color: 'rgba(29,78,216,0.3)', fontSize: 11 }}>·</span>
-              <button onClick={() => { setStep('form'); setOtp(''); setError(''); setSentOtp('') }} style={{
+              <button onClick={() => { setStep('form'); setOtp(''); setError('') }} style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 fontSize: 12, color: '#6b7280', fontWeight: 600,
               }}>← Change Email</button>
@@ -279,5 +295,3 @@ function SignIn({ onSignIn }) {
     </div>
   )
 }
-
-export default SignIn
