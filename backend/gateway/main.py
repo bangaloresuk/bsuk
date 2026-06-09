@@ -37,7 +37,7 @@ app.mount("/auth",         load_service("auth"))
 app.mount("/messages",     load_service("messages"))
 app.mount("/prayer-times", load_service("prayer-times"))
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "ok", "service": "BSUK API Gateway"}
 
