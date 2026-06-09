@@ -16,6 +16,10 @@ SUK_CONFIG = {
         "url": os.getenv("BANASHANKARI_GAS_URL", ""),
         "key": os.getenv("BANASHANKARI_API_KEY", ""),
     },
+    "marathahalli": {
+        "url": os.getenv("MARATHAHALLI_GAS_URL", ""),
+        "key": os.getenv("MARATHAHALLI_API_KEY", ""),
+    },
 }
 
 
