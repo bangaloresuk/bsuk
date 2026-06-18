@@ -53,3 +53,9 @@ export const photoApi = {
   upload:  (base64, filename, caption, uploader) => db.photos.upload(base64, filename, caption, uploader),
   delete:  (photoId)                    => db.photos.delete(photoId),
 }
+
+export const locationApi = {
+  search:  (q)        => db.location.search(q),
+  place:   (placeId)  => db.location.place(placeId),
+  reverse: (lat, lon) => db.location.reverse(lat, lon),
+}

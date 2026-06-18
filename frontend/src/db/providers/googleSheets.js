@@ -16,8 +16,8 @@ const SHEET = {
 let _scriptUrl = ''
 let _apiKey    = ''
 
-async function apiCall(method, path, body = null) {
-  const params = new URLSearchParams({ suk_key: _apiKey })
+async function apiCall(method, path, body = null, extraParams = {}) {
+  const params = new URLSearchParams({ suk_key: _apiKey, ...extraParams })
   const url = `${_scriptUrl}${path}?${params}`
   const options = { method, headers: { 'Content-Type': 'application/json' } }
   if (body) options.body = JSON.stringify(body)
@@ -68,5 +68,11 @@ export const googleSheetsProvider = {
     getAll:  ()                                    => apiCall('GET',    '/gallery/photos'),
     upload:  (base64, filename, caption, uploader) => apiCall('POST',   '/gallery/photos', { base64, filename, caption, uploader, suk_key: _apiKey }),
     delete:  (photoId)                             => apiCall('DELETE', `/gallery/photos/${photoId}`),
+  },
+
+  location: {
+    search:  (q)         => apiCall('GET', '/location/search', null, { q }),
+    place:   (placeId)   => apiCall('GET', `/location/place/${placeId}`),
+    reverse: (lat, lon)  => apiCall('GET', '/location/reverse', null, { lat, lon }),
   },
 }

@@ -17,7 +17,7 @@
 import React from 'react'
 import { SUK_CONFIG, DEFAULT_FEATURES, sukLabel } from '../config/sukConfig.js'
 import state from '../config/activeSuk.js'
-import { api, satsangApi, bhadraApi, matriApi, savanApi, photoApi } from '../services/api.js'
+import { api, satsangApi, bhadraApi, matriApi, savanApi, photoApi, locationApi } from '../services/api.js'
 import {
   formatDate, formatDateWithDay, getDayName, getTodayStr,
   cleanTime, cleanPhotoDate, maskMobile,
@@ -38,11 +38,15 @@ import DashboardTab   from './tabs/DashboardTab.jsx'
 // ════════════════════════════════════════════════════════════════
 //  LocationPicker — reusable "find my location" helper
 //  ─────────────────────────────────────────────────────────────
-//  Two free, no-API-key ways to fill an address + Google Maps link:
+//  Two ways to fill an address + Google Maps link, restricted to
+//  India. Both go through our own backend (locationApi), which
+//  holds the real Google API key server-side — the key never
+//  reaches the browser:
 //   1. 📍 "Use my current location" — browser GPS (navigator.geolocation)
-//      + reverse-geocode via OpenStreetMap Nominatim for a readable address.
-//   2. 🔍 Search box — forward-geocode via Nominatim, shows a dropdown
-//      of matching places; picking one fills both fields.
+//      + backend reverse-geocode into a readable address.
+//   2. 🔍 Search box — backend Places Autocomplete, shows a dropdown
+//      of matching places restricted to India; picking one fetches
+//      Place Details for the exact coordinates + formatted address.
 //  Both write into whatever address/maps fields the caller passes in.
 // ════════════════════════════════════════════════════════════════
 function LocationPicker({ onPick, color = "#1d4ed8", placeholder = "Search for a place, area or landmark…" }) {
@@ -57,12 +61,8 @@ function LocationPicker({ onPick, color = "#1d4ed8", placeholder = "Search for a
     if (!q || q.trim().length < 3) { setResults([]); return; }
     setSearching(true);
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&countrycodes=in&q=${encodeURIComponent(q.trim())}`,
-        { headers: { "Accept-Language": "en" } }
-      );
-      const data = await res.json();
-      setResults(Array.isArray(data) ? data : []);
+      const resp = await locationApi.search(q.trim());
+      setResults(resp.success && Array.isArray(resp.data) ? resp.data : []);
       setShowResults(true);
     } catch(e) { setResults([]); }
     setSearching(false);
@@ -74,15 +74,27 @@ function LocationPicker({ onPick, color = "#1d4ed8", placeholder = "Search for a
     debounceRef.current = setTimeout(() => doSearch(v), 500);
   };
 
-  const pickResult = (r) => {
-    const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
-    onPick({
-      address:  r.display_name,
-      mapsLink: `https://maps.google.com/?q=${lat},${lon}`,
-    });
+  const pickResult = async (r) => {
     setQuery(r.display_name);
     setResults([]);
     setShowResults(false);
+    try {
+      const resp = await locationApi.place(r.placeId);
+      const d = resp.success ? resp.data : null;
+      onPick({
+        address:  d?.address || r.display_name,
+        mapsLink: (d?.lat != null && d?.lon != null)
+          ? `https://maps.google.com/?q=${d.lat},${d.lon}`
+          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.display_name)}`,
+      });
+    } catch(e) {
+      // Fall back to the text label if Place Details lookup fails —
+      // the maps link still works as a text search.
+      onPick({
+        address:  r.display_name,
+        mapsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.display_name)}`,
+      });
+    }
   };
 
   const useCurrentLocation = () => {
@@ -97,12 +109,8 @@ function LocationPicker({ onPick, color = "#1d4ed8", placeholder = "Search for a
         const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
         let address = "";
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-            { headers: { "Accept-Language": "en" } }
-          );
-          const data = await res.json();
-          address = data.display_name || "";
+          const resp = await locationApi.reverse(latitude, longitude);
+          address = resp.success ? (resp.data?.address || "") : "";
         } catch(e) { /* ignore — maps link still works without address text */ }
         onPick({ address, mapsLink });
         setLocating(false);

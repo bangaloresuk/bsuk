@@ -39,6 +39,7 @@ app.mount("/gallery",      load_service("gallery"))
 app.mount("/auth",         load_service("auth"))
 app.mount("/messages",     load_service("messages"))
 app.mount("/prayer-times", load_service("prayer-times"))
+app.mount("/location",     load_service("location"))
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
