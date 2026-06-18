@@ -9,6 +9,7 @@
 // ============================================================
 
 import React from 'react'
+import DevoteeTracker from './DevoteeTracker.jsx'
 
 const BLUE   = '#1d4ed8'
 const TEAL   = '#0f6e56'
@@ -317,6 +318,7 @@ export default function DashboardTab({ bookings=[], satsangBookings=[] }) {
     { id:'members',  label:'🪷 Members'  },
     { id:'trends',   label:'📈 Trends'   },
     { id:'upcoming', label:'🗓️ Upcoming' },
+    { id:'devotees', label:'🧘 Devotees' },
   ]
   const navSt = id => ({
     flex:1, padding:'9px 4px', border:'none', borderRadius:12, cursor:'pointer',
@@ -834,6 +836,8 @@ export default function DashboardTab({ bookings=[], satsangBookings=[] }) {
 
         </div>
       )}
+
+      {page==='devotees' && <DevoteeTracker bookings={bookings} />}
 
       {/* Footer */}
       <div style={{textAlign:'center',padding:'10px 0 6px',

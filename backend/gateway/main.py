@@ -32,6 +32,9 @@ app.add_middleware(
 
 app.mount("/booking",      load_service("booking"))
 app.mount("/satsang",      load_service("satsang"))
+app.mount("/bhadra",       load_service("bhadra"))
+app.mount("/matri",        load_service("matri"))
+app.mount("/savan",        load_service("savan"))
 app.mount("/gallery",      load_service("gallery"))
 app.mount("/auth",         load_service("auth"))
 app.mount("/messages",     load_service("messages"))

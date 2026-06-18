@@ -10,6 +10,9 @@ const WORKER_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 export const DEFAULT_FEATURES = {
   prayerBooking:   true,
   satsangBooking:  true,
+  bhadraBooking:   false,   // Bhadra Parikrama Satsang — opt-in per SUK
+  matriBooking:    false,   // Matri-Sammelan            — opt-in per SUK
+  savanBooking:    false,   // Savan Parikrama           — opt-in per SUK
   cancelBooking:   true,
   retrieveBooking: true,
   allBookings:     true,
@@ -22,7 +25,8 @@ export const SUK_CONFIG = {
   'bannerghatta': {
     key: 'bannerghatta', name: 'Bannerghatta Satsang Upayojana Kendra',
     shortName: 'Bannerghatta SUK', emoji: '🪷', location: 'Bangalore South',
-    scriptUrl: WORKER_URL, apiKey: 'bannerghatta', configured: true, features: {},
+    scriptUrl: WORKER_URL, apiKey: 'bannerghatta', configured: true,
+    features: { bhadraBooking: true, matriBooking: true, savanBooking: true },
   },
   'peenya-2nd-stage': {
     key: 'peenya-2nd-stage', name: 'Peenya 2nd Stage SUK',

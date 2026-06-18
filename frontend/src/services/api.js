@@ -27,6 +27,27 @@ export const satsangApi = {
   cancel: (id)   => db.satsang.cancel(id),  // ← this was missing, App.jsx calls satsangApi.cancel()
 }
 
+export const bhadraApi = {
+  getAll: ()     => db.bhadra.getAll(),
+  post:   (data) => db.bhadra.add(data),
+  delete: (id)   => db.bhadra.cancel(id),
+  cancel: (id)   => db.bhadra.cancel(id),
+}
+
+export const matriApi = {
+  getAll: ()     => db.matri.getAll(),
+  post:   (data) => db.matri.add(data),
+  delete: (id)   => db.matri.cancel(id),
+  cancel: (id)   => db.matri.cancel(id),
+}
+
+export const savanApi = {
+  getAll: ()     => db.savan.getAll(),
+  post:   (data) => db.savan.add(data),
+  delete: (id)   => db.savan.cancel(id),
+  cancel: (id)   => db.savan.cancel(id),
+}
+
 export const photoApi = {
   getAll:  ()                           => db.photos.getAll(),
   upload:  (base64, filename, caption, uploader) => db.photos.upload(base64, filename, caption, uploader),

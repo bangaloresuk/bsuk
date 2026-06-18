@@ -17,7 +17,7 @@
 import React from 'react'
 import { SUK_CONFIG, DEFAULT_FEATURES, sukLabel } from '../config/sukConfig.js'
 import state from '../config/activeSuk.js'
-import { api, satsangApi, photoApi } from '../services/api.js'
+import { api, satsangApi, bhadraApi, matriApi, savanApi, photoApi } from '../services/api.js'
 import {
   formatDate, formatDateWithDay, getDayName, getTodayStr,
   cleanTime, cleanPhotoDate, maskMobile,
@@ -35,6 +35,190 @@ import PrayerTimesTab from './tabs/PrayerTimesTab.jsx'
 import GalleryTab     from './tabs/GalleryTab.jsx'
 import DashboardTab   from './tabs/DashboardTab.jsx'
 
+// ════════════════════════════════════════════════════════════════
+//  LocationPicker — reusable "find my location" helper
+//  ─────────────────────────────────────────────────────────────
+//  Two free, no-API-key ways to fill an address + Google Maps link:
+//   1. 📍 "Use my current location" — browser GPS (navigator.geolocation)
+//      + reverse-geocode via OpenStreetMap Nominatim for a readable address.
+//   2. 🔍 Search box — forward-geocode via Nominatim, shows a dropdown
+//      of matching places; picking one fills both fields.
+//  Both write into whatever address/maps fields the caller passes in.
+// ════════════════════════════════════════════════════════════════
+function LocationPicker({ onPick, color = "#1d4ed8", placeholder = "Search for a place, area or landmark…" }) {
+  const [query,   setQuery]   = React.useState("");
+  const [results, setResults] = React.useState([]);
+  const [searching, setSearching] = React.useState(false);
+  const [locating,  setLocating]  = React.useState(false);
+  const [showResults, setShowResults] = React.useState(false);
+  const debounceRef = React.useRef(null);
+
+  const doSearch = async (q) => {
+    if (!q || q.trim().length < 3) { setResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&q=${encodeURIComponent(q.trim())}`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      const data = await res.json();
+      setResults(Array.isArray(data) ? data : []);
+      setShowResults(true);
+    } catch(e) { setResults([]); }
+    setSearching(false);
+  };
+
+  const handleQueryChange = (v) => {
+    setQuery(v);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(v), 500);
+  };
+
+  const pickResult = (r) => {
+    const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+    onPick({
+      address:  r.display_name,
+      mapsLink: `https://maps.google.com/?q=${lat},${lon}`,
+    });
+    setQuery(r.display_name);
+    setResults([]);
+    setShowResults(false);
+  };
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Your browser doesn't support location access.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+        let address = "";
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+            { headers: { "Accept-Language": "en" } }
+          );
+          const data = await res.json();
+          address = data.display_name || "";
+        } catch(e) { /* ignore — maps link still works without address text */ }
+        onPick({ address, mapsLink });
+        setLocating(false);
+      },
+      (err) => {
+        alert("Couldn't get your location: " + (err.message || "Permission denied."));
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  return (
+    <div style={{ position:"relative" }}>
+      <div style={{ display:"flex", gap:8 }}>
+        <div style={{ flex:1, position:"relative" }}>
+          <input className="divine-input" placeholder={placeholder}
+            value={query}
+            onChange={e => handleQueryChange(e.target.value)}
+            onFocus={() => { if (results.length) setShowResults(true); }}
+            style={{ borderColor: `${color}33`, paddingRight: 34 }}/>
+          {searching && (
+            <span style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
+              fontSize:13, color:`${color}99` }}>⏳</span>
+          )}
+          {showResults && results.length > 0 && (
+            <div style={{
+              position:"absolute", top:"calc(100% + 4px)", left:0, right:0, zIndex:50,
+              background:"#fff", border:`1px solid ${color}33`, borderRadius:10,
+              boxShadow:"0 8px 24px rgba(0,0,0,0.12)", overflow:"hidden", maxHeight:220, overflowY:"auto"
+            }}>
+              {results.map((r,i) => (
+                <div key={i} onClick={() => pickResult(r)}
+                  style={{ padding:"9px 12px", fontSize:12, cursor:"pointer",
+                    borderBottom: i<results.length-1 ? "1px solid #f0f0f0" : "none", color:"#374151" }}
+                  onMouseDown={e => e.preventDefault()}>
+                  📍 {r.display_name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <button type="button" onClick={useCurrentLocation} disabled={locating}
+          title="Use my current location"
+          style={{
+            flexShrink:0, padding:"0 14px", borderRadius:10, border:`1px solid ${color}33`,
+            background: locating ? "#f3f4f6" : `${color}10`, color, fontWeight:700, fontSize:12,
+            cursor: locating ? "not-allowed" : "pointer", whiteSpace:"nowrap",
+          }}>
+          {locating ? "⏳" : "📍"} {locating ? "Locating…" : "My location"}
+        </button>
+      </div>
+      <div style={{ fontSize:10, color:"rgba(0,0,0,0.35)", marginTop:4 }}>
+        Search a place above, or tap "My location" to use your phone's GPS — both fill the address and maps link below.
+      </div>
+    </div>
+  );
+}
+
+// ── EventDateChips — reusable date-chip picker with live availability ──
+// Shows next `days` dates as scrollable chips. Each chip shows the
+// day name, date number, a "FREE" / "N BOOKED" label, and a status
+// dot — based on how many `bookings` exist for that date.
+function EventDateChips({ bookings = [], value, onChange, color = "#1d4ed8", idPrefix = "evChips", days = 14 }) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const chips = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today); d.setDate(today.getDate()+i);
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), dd = String(d.getDate()).padStart(2,"0");
+    const dateStr = `${y}-${m}-${dd}`;
+    const count = bookings.filter(b => b.date === dateStr).length;
+    const sel = value === dateStr;
+    chips.push(
+      <button key={dateStr} type="button"
+        onClick={() => onChange(dateStr)}
+        style={{ display:"flex", flexDirection:"column", alignItems:"center",
+          padding:"8px 6px", borderRadius:12, flexShrink:0,
+          border:`2px solid ${sel?color:count>0?"#fcd34d":"rgba(59,130,246,0.18)"}`,
+          background:sel?color:count>0?"#fef3c7":"#f0f9ff",
+          cursor:"pointer", minWidth:54,
+          transition:"all 0.15s",
+          boxShadow:sel?`0 3px 12px ${color}55`:"none" }}>
+        <div style={{ fontSize:9, fontWeight:700, textTransform:"uppercase",
+          color:sel?"rgba(255,255,255,0.8)":"#6b7280", letterSpacing:"0.5px" }}>
+          {i===0?"Today":["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]}
+        </div>
+        <div style={{ fontSize:16, fontWeight:900, marginTop:2,
+          color:sel?"#fff":"#1e3a8a" }}>{dd}</div>
+        <div style={{ fontSize:8, marginTop:3, fontWeight:800, whiteSpace:"nowrap",
+          color:sel?"rgba(255,255,255,0.9)":count>0?"#d97706":"#16a34a" }}>
+          {count>0?`${count} BOOKED`:"FREE"}
+        </div>
+        <div style={{ display:"flex", gap:2, marginTop:4 }}>
+          <div style={{ width:5, height:5, borderRadius:"50%", background:count>0?"#f59e0b":"#22c55e" }}/>
+        </div>
+      </button>
+    );
+  }
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+      <button type="button" onClick={() => { const el=document.getElementById(idPrefix); if(el) el.scrollBy({left:-160,behavior:"smooth"}); }}
+        style={{ flexShrink:0, width:32, height:32, borderRadius:"50%", border:"none",
+          background:`linear-gradient(135deg,${color},${color}cc)`, color:"#fff",
+          fontSize:18, cursor:"pointer", fontWeight:900, lineHeight:1 }}>‹</button>
+      <div id={idPrefix} style={{ display:"flex", gap:6, overflowX:"auto", flex:1,
+        paddingBottom:6, scrollbarWidth:"none" }}>
+        {chips}
+      </div>
+      <button type="button" onClick={() => { const el=document.getElementById(idPrefix); if(el) el.scrollBy({left:160,behavior:"smooth"}); }}
+        style={{ flexShrink:0, width:32, height:32, borderRadius:"50%", border:"none",
+          background:`linear-gradient(135deg,${color},${color}cc)`, color:"#fff",
+          fontSize:18, cursor:"pointer", fontWeight:900, lineHeight:1 }}>›</button>
+    </div>
+  );
+}
+
 function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequestSignIn }) {
   // Merge DEFAULT_FEATURES with this SUK's overrides
   const feat = React.useMemo(() => ({
@@ -51,11 +235,15 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
   const [error,      setError]      = React.useState("");
   const [shake,      setShake]      = React.useState(false);
   const [activeTab,  setActiveTab]  = React.useState("book");
-  const [manageTab,  setManageTab]  = React.useState(null);
+  const [manageTab,       setManageTab]       = React.useState(null);
+  const [allBookingsFilter, setAllBookingsFilter] = React.useState("all");
   const [bookMode,   setBookMode]   = React.useState("prayer"); // "prayer" | "satsang"
   // Reset bookMode if current mode is disabled for this SUK
   React.useEffect(() => {
     if (feat && !feat.satsangBooking && bookMode === "satsang") setBookMode("prayer");
+    if (feat && !feat.bhadraBooking  && bookMode === "bhadra")  setBookMode("prayer");
+    if (feat && !feat.matriBooking   && bookMode === "matri")   setBookMode("prayer");
+    if (feat && !feat.savanBooking   && bookMode === "savan")   setBookMode("prayer");
   }, [feat, bookMode]);
 
   // ── Deep-link: auto-navigate to gallery if ?open=gallery in URL ──
@@ -84,7 +272,8 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
   const [cancelMsg, setCancelMsg] = React.useState("");
   const [cancelling, setCancelling] = React.useState(null); // stores the ID being cancelled
   // Retrieve & reshare
-  const [shareMobile, setShareMobile] = React.useState("");
+  const [shareMobile,        setShareMobile]        = React.useState("");
+  const [retrieveTypeFilter, setRetrieveTypeFilter] = React.useState("prayer");
   const [shareResults, setShareResults] = React.useState(null);
   const [shareMsg, setShareMsg] = React.useState("");
   // Past-toggle state for Retrieve tab and Cancel section (component-level to obey hook rules)
@@ -93,6 +282,9 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
   // Announcements
   // Satsang Booking state
   const [satsangBookings, setSatsangBookings] = React.useState([]);
+  const [bhadraBookings, setBhadraBookings] = React.useState([]);
+  const [matriBookings,  setMatriBookings]  = React.useState([]);
+  const [savanBookings,  setSavanBookings]  = React.useState([]);
   const [satsangLoadingData, setSatsangLoadingData] = React.useState(false);
   const [satsangForm, setSatsangForm] = React.useState({ name:"", mobile:"", venue:"", date:"", time:"", hostedBy:"", mapsLink:"", occasion:"" });
   const [satsangError, setSatsangError] = React.useState("");
@@ -125,6 +317,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
   // Address edit
   const [editingAddress, setEditingAddress] = React.useState(null);
   const [editAddressVal, setEditAddressVal] = React.useState("");
+  const [editMapsVal,    setEditMapsVal]    = React.useState("");
   const [savingAddress, setSavingAddress] = React.useState(false);
   const [addressMsg, setAddressMsg] = React.useState({});
 
@@ -258,17 +451,28 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     setBookingsReady(false);
     setSatsangReady(false);
     try {
-      const [bd, sd] = await Promise.all([
-        api.getAll(),
-        satsangApi.getAll(),
-      ]);
+      const fetches = [api.getAll(), satsangApi.getAll()];
+      if (feat.bhadraBooking) fetches.push(bhadraApi.getAll());
+      if (feat.matriBooking)  fetches.push(matriApi.getAll());
+      if (feat.savanBooking)  fetches.push(savanApi.getAll());
+      const results = await Promise.all(fetches);
+      const [bd, sd] = results;
       const freshBookings = (bd && bd.success && Array.isArray(bd.data)) ? bd.data : [];
       const freshSatsang  = (sd && sd.success && Array.isArray(sd.data)) ? sd.data : [];
+      const freshBhadra   = feat.bhadraBooking && results[2] ? ((results[2].success && Array.isArray(results[2].data)) ? results[2].data : []) : [];
+      const freshMatri    = feat.matriBooking  && results[feat.bhadraBooking?3:2] ? ((results[feat.bhadraBooking?3:2].success && Array.isArray(results[feat.bhadraBooking?3:2].data)) ? results[feat.bhadraBooking?3:2].data : []) : [];
+      const freshSavan    = feat.savanBooking  && results[results.length-1] ? ((results[results.length-1].success && Array.isArray(results[results.length-1].data)) ? results[results.length-1].data : []) : [];
       setBookings(freshBookings);
       setSatsangBookings(freshSatsang);
+      if (freshBhadra.length) setBhadraBookings(freshBhadra);
+      if (freshMatri.length)  setMatriBookings(freshMatri);
+      if (freshSavan.length)  setSavanBookings(freshSavan);
       const prayerFound  = freshBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"prayer" }));
       const satsangFound = freshSatsang.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"satsang" }));
-      const combined = [...prayerFound, ...satsangFound].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+      const bhadraFnd    = freshBhadra.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"bhadra" }));
+      const matriFnd     = freshMatri.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"matri" }));
+      const savanFnd     = freshSavan.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"savan" }));
+      const combined = [...prayerFound, ...satsangFound, ...bhadraFnd, ...matriFnd, ...savanFnd].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
       if (combined.length === 0) {
         setCancelMsg("❌ No bookings found for this mobile number.");
         setCancelResults([]);
@@ -314,31 +518,28 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     setCancelling(null);
   };
 
-  const handleUpdateAddress = async (bookingId, newAddress) => {
+  const handleUpdateAddress = async (bookingId, newAddress, newMapsLink) => {
     setSavingAddress(true);
     try {
-      const isLink = newAddress.startsWith("http") || newAddress.includes("maps.google") ||
-                     newAddress.includes("goo.gl") || newAddress.includes("maps.app");
-      const result = await api.post({
-        action: "updateAddress",
-        id:     bookingId,
-        place:  newAddress,   // store as-is — text or maps link, all goes to Place column
-      });
+      const parts = [newAddress.trim(), (newMapsLink||"").trim()].filter(Boolean);
+      const combined = parts.join("  ");
+      // FIXED: use api.update (PATCH /bookings/{id}/address) not api.post
+      const result = await api.update(bookingId, combined);
       if (result.success) {
-        // Update local state — place field stores both text address and maps links
         setShareResults(prev => prev.map(b =>
-          b.id === bookingId ? { ...b, place: newAddress } : b
+          b.id === bookingId ? { ...b, place: combined } : b
         ));
-        // also update bookings state so cancel section is fresh
-        setAddressMsg(prev => ({ ...prev, [bookingId]: "✅ Address updated!" }));
+        setAddressMsg(prev => ({ ...prev, [bookingId]: "Address updated!" }));
         setEditingAddress(null);
+        setEditAddressVal("");
+        setEditMapsVal("");
         fetchBookings();
         setTimeout(() => setAddressMsg(prev => { const n={...prev}; delete n[bookingId]; return n; }), 3000);
       } else {
-        setAddressMsg(prev => ({ ...prev, [bookingId]: "❌ " + result.message }));
+        setAddressMsg(prev => ({ ...prev, [bookingId]: "Error: " + (result.message || "Update failed") }));
       }
     } catch(e) {
-      setAddressMsg(prev => ({ ...prev, [bookingId]: "❌ Network error." }));
+      setAddressMsg(prev => ({ ...prev, [bookingId]: "Network error. Please try again." }));
     }
     setSavingAddress(false);
   };
@@ -433,7 +634,12 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     // Search BOTH prayer and satsang bookings
     const prayerFound   = bookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"prayer" }));
     const satsangFound  = satsangBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"satsang" }));
-    const combined = [...prayerFound, ...satsangFound]
+    const bhadraFound   = feat.bhadraBooking ? bhadraBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"bhadra" })) : [];
+    const matriFound    = feat.matriBooking  ? matriBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"matri" }))  : [];
+    const savanFound    = feat.savanBooking  ? savanBookings.filter(b => b.mobile === mob).map(b => ({ ...b, _type:"savan" }))  : [];
+    const allFound = [...prayerFound, ...satsangFound, ...bhadraFound, ...matriFound, ...savanFound];
+    // Filter by type if not "all"
+    const combined = retrieveTypeFilter === "all" ? allFound : allFound.filter(b => b._type === retrieveTypeFilter)
       .sort((a,b) => (a.date||"").localeCompare(b.date||"")); // oldest first (Jan → Feb → Mar)
     if (combined.length === 0) {
       setShareMsg("❌ No bookings found for this mobile number.");
@@ -475,6 +681,42 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     setCancelling(null);
   };
 
+  // ── Cancel Bhadra / Matri / Savan — routes to correct API ──
+  const handleCancelSpecial = async (id, _type) => {
+    const LABEL = { satsang:"Satsang", bhadra:"Bhadra Parikrama", matri:"Matri-Sammelan", savan:"Savan Parikrama" };
+    const API   = { satsang:satsangApi, bhadra:bhadraApi, matri:matriApi, savan:savanApi };
+    const FETCH = { satsang:fetchSatsangBookings, bhadra:fetchBhadraBookings, matri:fetchMatriBookings, savan:fetchSavanBookings };
+    const SET   = {
+      satsang: v => setSatsangBookings(v),
+      bhadra:  v => setBhadraBookings(v),
+      matri:   v => setMatriBookings(v),
+      savan:   v => setSavanBookings(v),
+    };
+    const label = LABEL[_type] || "booking";
+    const api   = API[_type]   || satsangApi;
+    const fetch = FETCH[_type] || fetchSatsangBookings;
+    const setFn = SET[_type];
+    if (!window.confirm(`Are you sure you want to cancel this ${label} booking?`)) return;
+    setCancelling(id);
+    try {
+      const result = await api.cancel(id);
+      if (result.success) {
+        if (setFn) setFn(prev => prev.filter(b => b.id !== id));
+        setShareResults(prev => Array.isArray(prev) ? prev.filter(b => b.id !== id) : prev);
+        const successMsg = `✅ ${label} cancelled successfully.`;
+        setCancelMsg(successMsg); setShareMsg(successMsg);
+        await fetch();
+      } else {
+        const errMsg = "❌ Could not cancel: " + (result.message||"Please try again.");
+        setCancelMsg(errMsg); setShareMsg(errMsg);
+      }
+    } catch(e) {
+      const errMsg = "❌ Could not cancel: " + (e?.message||"Please try again.");
+      setCancelMsg(errMsg); setShareMsg(errMsg);
+    }
+    setCancelling(null);
+  };
+
   // ── Fetch satsang bookings ─────────────────────────────────
   const fetchSatsangBookings = React.useCallback(async () => {
     if (!isConfigured) { setSatsangReady(true); return; }
@@ -487,7 +729,40 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
     setSatsangReady(true);
   }, [isConfigured]);
 
+  // Each special event (Bhadra / Matri / Savan) lives in its own sheet —
+  // fetched the same way as Satsang so duplicate-slot checks and the
+  // "already booked" cards work per-event-type.
+  const fetchBhadraBookings = React.useCallback(async () => {
+    if (!isConfigured || !feat.bhadraBooking) return;
+    try {
+      const d = await bhadraApi.getAll();
+      if (d.success && Array.isArray(d.data)) setBhadraBookings(d.data);
+      else if (Array.isArray(d)) setBhadraBookings(d);
+    } catch(e) { console.error('fetchBhadra error:', e); }
+  }, [isConfigured]);
+
+  const fetchMatriBookings = React.useCallback(async () => {
+    if (!isConfigured || !feat.matriBooking) return;
+    try {
+      const d = await matriApi.getAll();
+      if (d.success && Array.isArray(d.data)) setMatriBookings(d.data);
+      else if (Array.isArray(d)) setMatriBookings(d);
+    } catch(e) { console.error('fetchMatri error:', e); }
+  }, [isConfigured]);
+
+  const fetchSavanBookings = React.useCallback(async () => {
+    if (!isConfigured || !feat.savanBooking) return;
+    try {
+      const d = await savanApi.getAll();
+      if (d.success && Array.isArray(d.data)) setSavanBookings(d.data);
+      else if (Array.isArray(d)) setSavanBookings(d);
+    } catch(e) { console.error('fetchSavan error:', e); }
+  }, [isConfigured]);
+
   React.useEffect(() => { fetchSatsangBookings(); }, [fetchSatsangBookings]);
+  React.useEffect(() => { fetchBhadraBookings(); }, [fetchBhadraBookings]);
+  React.useEffect(() => { fetchMatriBookings();  }, [fetchMatriBookings]);
+  React.useEffect(() => { fetchSavanBookings();  }, [fetchSavanBookings]);
 
   const triggerSatsangError = (msg) => {
     setSatsangError(msg); setSatsangShake(true);
@@ -1079,43 +1354,77 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           letterSpacing:"4px", textTransform:"uppercase", marginTop:5 }}>
           {state.ACTIVE_SUK ? `${state.ACTIVE_SUK.emoji} ${sukLabel(state.ACTIVE_SUK)}${state.ACTIVE_SUK.location ? " · "+state.ACTIVE_SUK.location : ""} ${state.ACTIVE_SUK.emoji}` : "🪷 Satsang Upayojana Kendra 🪷"}
         </p>
-        {(bookings.length > 0 || satsangBookings.length > 0) && (
+        {(bookings.length > 0 || satsangBookings.length > 0 || bhadraBookings.length > 0 || matriBookings.length > 0 || savanBookings.length > 0) && (
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
             gap:8, marginTop:10, flexWrap:"wrap" }}>
             {bookings.length > 0 && (
-              <div
-                onClick={() => { setActiveTab("manage"); setManageTab("all"); }}
-                style={{ display:"inline-flex", alignItems:"center", gap:5,
-                  padding:"5px 12px", borderRadius:20,
-                  background:"rgba(29,78,216,0.07)",
-                  border:"1px solid rgba(29,78,216,0.14)",
+              <div onClick={() => { setAllBookingsFilter("prayer"); setActiveTab("manage"); setManageTab("all"); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20,
+                  background:"rgba(29,78,216,0.07)", border:"1px solid rgba(29,78,216,0.14)",
                   cursor:"pointer", transition:"background 0.2s" }}
                 onMouseEnter={e => e.currentTarget.style.background="rgba(29,78,216,0.15)"}
                 onMouseLeave={e => e.currentTarget.style.background="rgba(29,78,216,0.07)"}>
                 <span style={{ fontSize:12 }}>🌅</span>
-                <span style={{ fontSize:11, color:"rgba(29,78,216,0.6)", fontWeight:700,
-                  fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
+                <span style={{ fontSize:11, color:"rgba(29,78,216,0.6)", fontWeight:700, fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
                   {bookings.length} Prayer{bookings.length!==1?"s":""}
                 </span>
                 <span style={{ fontSize:9, color:"rgba(29,78,216,0.4)", marginLeft:2 }}>›</span>
               </div>
             )}
             {feat.satsangBooking && satsangBookings.length > 0 && (
-              <div
-                onClick={() => { setActiveTab("manage"); setManageTab("all"); }}
-                style={{ display:"inline-flex", alignItems:"center", gap:5,
-                  padding:"5px 12px", borderRadius:20,
-                  background:"rgba(217,119,6,0.07)",
-                  border:"1px solid rgba(217,119,6,0.18)",
+              <div onClick={() => { setAllBookingsFilter("satsang"); setActiveTab("manage"); setManageTab("all"); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20,
+                  background:"rgba(217,119,6,0.07)", border:"1px solid rgba(217,119,6,0.18)",
                   cursor:"pointer", transition:"background 0.2s" }}
                 onMouseEnter={e => e.currentTarget.style.background="rgba(217,119,6,0.18)"}
                 onMouseLeave={e => e.currentTarget.style.background="rgba(217,119,6,0.07)"}>
                 <span style={{ fontSize:12 }}>🪔</span>
-                <span style={{ fontSize:11, color:"rgba(120,53,15,0.65)", fontWeight:700,
-                  fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
+                <span style={{ fontSize:11, color:"rgba(120,53,15,0.65)", fontWeight:700, fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
                   {satsangBookings.length} Satsang{satsangBookings.length!==1?"s":""}
                 </span>
                 <span style={{ fontSize:9, color:"rgba(120,53,15,0.4)", marginLeft:2 }}>›</span>
+              </div>
+            )}
+            {feat.bhadraBooking && bhadraBookings.length > 0 && (
+              <div onClick={() => { setAllBookingsFilter("bhadra"); setActiveTab("manage"); setManageTab("all"); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20,
+                  background:"rgba(124,58,237,0.07)", border:"1px solid rgba(124,58,237,0.2)",
+                  cursor:"pointer", transition:"background 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.background="rgba(124,58,237,0.18)"}
+                onMouseLeave={e => e.currentTarget.style.background="rgba(124,58,237,0.07)"}>
+                <span style={{ fontSize:12 }}>🌸</span>
+                <span style={{ fontSize:11, color:"rgba(109,40,217,0.75)", fontWeight:700, fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
+                  {bhadraBookings.length} Bhadra{bhadraBookings.length!==1?"s":""}
+                </span>
+                <span style={{ fontSize:9, color:"rgba(109,40,217,0.4)", marginLeft:2 }}>›</span>
+              </div>
+            )}
+            {feat.matriBooking && matriBookings.length > 0 && (
+              <div onClick={() => { setAllBookingsFilter("matri"); setActiveTab("manage"); setManageTab("all"); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20,
+                  background:"rgba(219,39,119,0.07)", border:"1px solid rgba(219,39,119,0.2)",
+                  cursor:"pointer", transition:"background 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.background="rgba(219,39,119,0.18)"}
+                onMouseLeave={e => e.currentTarget.style.background="rgba(219,39,119,0.07)"}>
+                <span style={{ fontSize:12 }}>🌺</span>
+                <span style={{ fontSize:11, color:"rgba(190,24,93,0.75)", fontWeight:700, fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
+                  {matriBookings.length} Matri{matriBookings.length!==1?"s":""}
+                </span>
+                <span style={{ fontSize:9, color:"rgba(190,24,93,0.4)", marginLeft:2 }}>›</span>
+              </div>
+            )}
+            {feat.savanBooking && savanBookings.length > 0 && (
+              <div onClick={() => { setAllBookingsFilter("savan"); setActiveTab("manage"); setManageTab("all"); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20,
+                  background:"rgba(22,163,74,0.07)", border:"1px solid rgba(22,163,74,0.2)",
+                  cursor:"pointer", transition:"background 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.background="rgba(22,163,74,0.18)"}
+                onMouseLeave={e => e.currentTarget.style.background="rgba(22,163,74,0.07)"}>
+                <span style={{ fontSize:12 }}>🌿</span>
+                <span style={{ fontSize:11, color:"rgba(21,128,61,0.75)", fontWeight:700, fontFamily:"'Cinzel',serif", letterSpacing:"0.5px" }}>
+                  {savanBookings.length} Savan{savanBookings.length!==1?"s":""}
+                </span>
+                <span style={{ fontSize:9, color:"rgba(21,128,61,0.4)", marginLeft:2 }}>›</span>
               </div>
             )}
           </div>
@@ -1169,9 +1478,9 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
             const BOOKING_TYPES = [
               feat.prayerBooking  && { mode:"prayer",   icon:"🙏", label:"Prayer Booking",           color:"#1d4ed8" },
               feat.satsangBooking && { mode:"satsang",  icon:"🪔", label:"Satsang Booking",           color:"#d97706" },
-                                     { mode:"bhadra",   icon:"🌸", label:"Bhadra Parikrama Satsang",  color:"#7c3aed" },
-                                     { mode:"matri",    icon:"🌺", label:"Matri-Sammelan",            color:"#db2777" },
-                                     { mode:"savan",    icon:"🌿", label:"Savan Parikrama",           color:"#16a34a" },
+              feat.bhadraBooking  && { mode:"bhadra",   icon:"🌸", label:"Bhadra Parikrama Satsang",  color:"#7c3aed" },
+              feat.matriBooking   && { mode:"matri",    icon:"🌺", label:"Matri-Sammelan",            color:"#db2777" },
+              feat.savanBooking   && { mode:"savan",    icon:"🌿", label:"Savan Parikrama",           color:"#16a34a" },
             ].filter(Boolean);
             const active = BOOKING_TYPES.find(t => t.mode === bookMode) || BOOKING_TYPES[0];
             return (
@@ -1245,6 +1554,17 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   type="tel" maxLength="10"
                   value={form.mobile}
                   onChange={e => { setError(""); setForm({...form, mobile:e.target.value.replace(/[^0-9]/g,"")}); }}/>
+              </div>
+
+              <div>
+                <label className="divine-label">🌐 Find My Location</label>
+                <LocationPicker color="#1d4ed8"
+                  placeholder="Search your area, landmark, address…"
+                  onPick={({ address, mapsLink }) => setForm(prev => ({
+                    ...prev,
+                    place: address || prev.place,
+                    mapsLink: mapsLink || prev.mapsLink,
+                  }))}/>
               </div>
 
               <div>
@@ -1483,6 +1803,19 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                 <input type="date" className="divine-input" value={satsangForm.date} min={getTodayStr()}
                   style={{ fontSize:13, width:"100%", cursor:"pointer", borderColor:"rgba(217,119,6,0.3)" }}
                   onChange={e=>{setSatsangError("");setSatsangForm({...satsangForm,date:e.target.value})}}/>
+                  <div style={{ fontSize:10, color:"rgba(120,53,15,0.45)", marginTop:5, paddingLeft:2 }}>
+                    ☝️ Tap a chip below for quick pick, or use the calendar above
+                  </div>
+                  <div style={{ marginTop:6 }}>
+                    <EventDateChips
+                      bookings={satsangBookings}
+                      value={satsangForm.date}
+                      onChange={d => { setSatsangError(""); setSatsangForm({...satsangForm, date:d}); }}
+                      color="#92400e"
+                      idPrefix="satChipScroll"
+                      days={14}
+                    />
+                  </div>
               </div>
               <div>
                 <label className="divine-label" style={{ color:"rgba(120,53,15,0.7)" }}>⏰ Time</label>
@@ -1490,6 +1823,16 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   value={satsangForm.time}
                   style={{ borderColor:"rgba(217,119,6,0.3)" }}
                   onChange={e=>setSatsangForm({...satsangForm,time:e.target.value})}/>
+              </div>
+              <div>
+                <label className="divine-label" style={{ color:"rgba(120,53,15,0.7)" }}>🌐 Find Venue Location</label>
+                <LocationPicker color="#92400e"
+                  placeholder="Search venue — area, landmark, address…"
+                  onPick={({ address, mapsLink }) => setSatsangForm(prev => ({
+                    ...prev,
+                    venue: address || prev.venue,
+                    mapsLink: mapsLink || prev.mapsLink,
+                  }))}/>
               </div>
               <div>
                 <label className="divine-label" style={{ color:"rgba(120,53,15,0.7)" }}>📍 Venue / Address</label>
@@ -1538,15 +1881,22 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
           )}
 
           {/* ══ BHADRA PARIKRAMA SATSANG / MATRI-SAMMELAN / SAVAN PARIKRAMA — Coming Soon ══ */}
-          {dataReady && (bookMode === "bhadra" || bookMode === "matri" || bookMode === "savan") && (() => {
-            const INFO = {
-              bhadra: { icon:"🌸", label:"Bhadra Parikrama Satsang", color:"#7c3aed", bg:"rgba(124,58,237,0.06)", border:"rgba(124,58,237,0.2)", desc:"Register for the sacred Bhadra Parikrama Satsang gathering." },
-              matri:  { icon:"🌺", label:"Matri-Sammelan",           color:"#db2777", bg:"rgba(219,39,119,0.06)", border:"rgba(219,39,119,0.2)", desc:"Join the divine Matri-Sammelan congregation." },
-              savan:  { icon:"🌿", label:"Savan Parikrama",          color:"#16a34a", bg:"rgba(22,163,74,0.06)",  border:"rgba(22,163,74,0.2)",  desc:"Register for the auspicious Savan Parikrama event." },
+          {dataReady && ((bookMode === "bhadra" && feat.bhadraBooking) || (bookMode === "matri" && feat.matriBooking) || (bookMode === "savan" && feat.savanBooking)) && (() => {
+            const SPECIAL_INFO = {
+              bhadra: { icon:"🌸", label:"Bhadra Parikrama Satsang", color:"#7c3aed", bg:"rgba(124,58,237,0.06)", border:"rgba(124,58,237,0.2)", btnGrad:"linear-gradient(135deg,#5b21b6,#7c3aed,#a78bfa)", shadow:"rgba(124,58,237,0.35)", api:bhadraApi, bookings:bhadraBookings, fetch:fetchBhadraBookings },
+              matri:  { icon:"🌺", label:"Matri-Sammelan",           color:"#db2777", bg:"rgba(219,39,119,0.06)", border:"rgba(219,39,119,0.2)", btnGrad:"linear-gradient(135deg,#9d174d,#db2777,#f472b6)", shadow:"rgba(219,39,119,0.35)", api:matriApi,  bookings:matriBookings,  fetch:fetchMatriBookings },
+              savan:  { icon:"🌿", label:"Savan Parikrama",          color:"#16a34a", bg:"rgba(22,163,74,0.06)",  border:"rgba(22,163,74,0.2)",  btnGrad:"linear-gradient(135deg,#14532d,#16a34a,#4ade80)",  shadow:"rgba(22,163,74,0.35)",  api:savanApi,  bookings:savanBookings,  fetch:fetchSavanBookings },
             };
-            const t = INFO[bookMode];
+            const t = SPECIAL_INFO[bookMode];
+            // Each event type now lives in its own Google Sheet —
+            // existing bookings come straight from that sheet, no
+            // occasion filtering needed.
+            const existingForType = t.bookings || [];
+            const isDupSpecial = (date, time) => existingForType.some(b => b.date === date && b.time.trim() === time.trim());
+
             return (
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
                 <div style={{ textAlign:"center", marginBottom:4 }}>
                   <div style={{ fontFamily:"'Cinzel',serif", color:t.color, fontSize:16, fontWeight:700 }}>
                     {t.icon} {t.label}
@@ -1554,81 +1904,167 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   <div style={{ height:1, background:`linear-gradient(90deg,transparent,${t.color}66,transparent)`, marginTop:10 }}/>
                 </div>
 
-                {/* Name */}
+                {existingForType.length > 0 && (
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.color, textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:8 }}>
+                      {t.icon} {existingForType.length} slot{existingForType.length!==1?"s":""} already booked
+                    </div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                      {[...existingForType].sort((a,b)=>a.date.localeCompare(b.date)).map(b => {
+                        const dd = (b.date||"").slice(8,10);
+                        const dayIdx = b.date ? new Date(b.date+"T00:00:00").getDay() : -1;
+                        const dayN = dayIdx>=0?["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dayIdx]:"";
+                        return (
+                          <div key={b.id} style={{ display:"flex", flexDirection:"column", alignItems:"center",
+                            padding:"7px 10px", borderRadius:12, minWidth:52,
+                            background:t.bg, border:`2px solid ${t.border}` }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:`${t.color}99`, textTransform:"uppercase", letterSpacing:"0.4px" }}>{dayN}</div>
+                            <div style={{ fontSize:15, fontWeight:900, color:t.color, lineHeight:1.2 }}>{dd}</div>
+                            <div style={{ fontSize:8, fontWeight:800, color:t.color, marginTop:2, textAlign:"center", maxWidth:60, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{cleanTime(b.time)||"—"}</div>
+                            <div style={{ fontSize:8, color:`${t.color}88`, marginTop:1, maxWidth:60, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{(b.name||"").split(" ")[0]}</div>
+                            <div style={{ width:6, height:6, borderRadius:"50%", background:t.color, marginTop:4 }}/>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ height:1, background:`${t.color}22`, margin:"8px 0" }}/>
+                  </div>
+                )}
+
+                {satsangError && (
+                  <div className={satsangShake?"shake":""} style={{ padding:"11px 14px", borderRadius:10,
+                    fontSize:13, fontWeight:600, background:"#fef3c7", color:"#92400e", whiteSpace:"pre-line" }}>
+                    {satsangError}
+                  </div>
+                )}
+
                 <div>
-                  <label className="divine-label" style={{ color:`${t.color}bb` }}>👤 Person's Name</label>
-                  <input className="divine-input" placeholder="Enter full name"
-                    value={form.name}
-                    style={{ borderColor:t.border }}
-                    onChange={e => { setError(""); setForm({...form, name:e.target.value}); }}/>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>👤 Host Name</label>
+                  <input className="divine-input" placeholder="Name of the person hosting"
+                    value={satsangForm.name} style={{ borderColor:t.border }}
+                    onChange={e=>{setSatsangError("");setSatsangForm({...satsangForm,name:e.target.value})}}/>
                 </div>
 
-                {/* Mobile */}
                 <div>
                   <label className="divine-label" style={{ color:`${t.color}bb` }}>📱 Mobile Number</label>
-                  <input className="divine-input" placeholder="Enter 10-digit mobile number"
-                    type="tel" maxLength="10"
-                    value={form.mobile}
-                    style={{ borderColor:t.border }}
-                    onChange={e => { setError(""); setForm({...form, mobile:e.target.value.replace(/[^0-9]/g,"")}); }}/>
+                  <input className="divine-input" placeholder="10-digit mobile" type="tel" maxLength={10}
+                    value={satsangForm.mobile} style={{ borderColor:t.border }}
+                    onChange={e=>{setSatsangError("");setSatsangForm({...satsangForm,mobile:e.target.value.replace(/[^0-9]/g,"")})}}/>
                 </div>
 
-                {/* Location */}
                 <div>
-                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📍 Location</label>
-                  <input className="divine-input" placeholder="Town / City"
-                    value={form.place}
-                    style={{ borderColor:t.border }}
-                    onChange={e => { setError(""); setForm({...form, place:e.target.value}); }}/>
-                </div>
-
-                {/* Date */}
-                <div>
-                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📅 Preferred Date</label>
-                  <input type="date" className="divine-input" value={form.date} min={getTodayStr()}
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📅 Date</label>
+                  <input type="date" className="divine-input" value={satsangForm.date} min={getTodayStr()}
                     style={{ fontSize:13, width:"100%", cursor:"pointer", borderColor:t.border }}
-                    onChange={e => { setError(""); setForm({...form, date:e.target.value}); }}/>
+                    onChange={e=>{setSatsangError("");setSatsangForm({...satsangForm,date:e.target.value})}}/>
+                  <div style={{ fontSize:10, color:`${t.color}77`, marginTop:5, paddingLeft:2 }}>
+                    ☝️ Tap a chip below for quick pick, or use the calendar above
+                  </div>
+                  <div style={{ marginTop:6 }}>
+                    <EventDateChips
+                      bookings={t.bookings}
+                      value={satsangForm.date}
+                      onChange={d => { setSatsangError(""); setSatsangForm({...satsangForm, date:d}); }}
+                      color={t.color}
+                      idPrefix={`${bookMode}ChipScroll`}
+                      days={14}
+                    />
+                  </div>
                 </div>
 
-                {/* Info note */}
-                <div style={{
-                  padding:"12px 14px", borderRadius:12, fontSize:12, lineHeight:1.7,
-                  background:t.bg, border:`1px solid ${t.border}`, color:t.color, fontWeight:600,
-                }}>
-                  {t.icon} {t.desc}<br/>
-                  <span style={{ opacity:0.7, fontWeight:500 }}>Our team will confirm your registration shortly. 🙏</span>
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>⏰ Time</label>
+                  <input className="divine-input" placeholder="e.g. 4:30 PM onwards"
+                    value={satsangForm.time} style={{ borderColor:t.border }}
+                    onChange={e=>{setSatsangError("");setSatsangForm({...satsangForm,time:e.target.value})}}/>
+                  {satsangForm.date && satsangForm.time && isDupSpecial(satsangForm.date, satsangForm.time) && (
+                    <div style={{ marginTop:5, padding:"8px 12px", borderRadius:8, fontSize:12,
+                      background:"#fee2e2", border:"1px solid #fca5a5", color:"#b91c1c", fontWeight:600 }}>
+                      ⚠️ This date & time is already booked for {t.label}. Please choose a different slot.
+                    </div>
+                  )}
                 </div>
 
-                {error && (
-                  <div className={shake?"shake":""} style={{
-                    padding:"14px 18px", borderRadius:12, fontSize:13, lineHeight:1.7,
-                    background:"#fee2e2", border:"1.5px solid #fca5a5", color:"#b91c1c",
-                  }}>{error}</div>
-                )}
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>🌐 Find Venue Location</label>
+                  <LocationPicker color={t.color}
+                    placeholder="Search venue — area, landmark, address…"
+                    onPick={({ address, mapsLink }) => setSatsangForm(prev => ({
+                      ...prev,
+                      venue: address || prev.venue,
+                      mapsLink: mapsLink || prev.mapsLink,
+                    }))}/>
+                </div>
+
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📍 Venue / Address</label>
+                  <input className="divine-input" placeholder="Full address of the venue"
+                    value={satsangForm.venue} style={{ borderColor:t.border }}
+                    onChange={e=>setSatsangForm({...satsangForm,venue:e.target.value})}/>
+                </div>
+
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>📌 Google Maps Link (optional)</label>
+                  <input className="divine-input" placeholder="Paste Google Maps link"
+                    value={satsangForm.mapsLink} style={{ borderColor:t.border }}
+                    onChange={e=>setSatsangForm({...satsangForm,mapsLink:e.target.value})}/>
+                </div>
+
+                <div>
+                  <label className="divine-label" style={{ color:`${t.color}bb` }}>🙏 Hosted By (optional)</label>
+                  <input className="divine-input" placeholder="e.g. Bannerghatta SUK"
+                    value={satsangForm.hostedBy} style={{ borderColor:t.border }}
+                    onChange={e=>setSatsangForm({...satsangForm,hostedBy:e.target.value})}/>
+                </div>
 
                 <div style={{ marginTop:4 }}>
                   <button
+                    disabled={satsangSubmitting || (satsangForm.date && satsangForm.time && isDupSpecial(satsangForm.date, satsangForm.time))}
+                    onClick={async () => {
+                      const { name, mobile, venue, date, time } = satsangForm;
+                      if (!name.trim())  { triggerSatsangError("⚠️ Please enter the host name."); return; }
+                      if (!/^[0-9]{10}$/.test(mobile.trim())) { triggerSatsangError("⚠️ Valid 10-digit mobile required."); return; }
+                      if (!date)         { triggerSatsangError("⚠️ Please select a date."); return; }
+                      if (date < getTodayStr()) { triggerSatsangError("⚠️ Please select today or a future date."); return; }
+                      if (!time.trim())  { triggerSatsangError("⚠️ Please enter the time."); return; }
+                      if (!venue.trim()) { triggerSatsangError("⚠️ Please enter the venue."); return; }
+                      if (isDupSpecial(date, time)) { triggerSatsangError("⚠️ This date & time is already booked for " + t.label + ". Please choose a different slot."); return; }
+                      if (!isConfigured) { triggerSatsangError("⚠️ Please configure the Script URL."); return; }
+                      setSatsangSubmitting(true);
+                      try {
+                        const result = await t.api.post({
+                          action:"add", name:name.trim(), mobile:mobile.trim(),
+                          venue:venue.trim(), date, time:time.trim(),
+                          hostedBy:satsangForm.hostedBy.trim() || (state.ACTIVE_SUK ? sukLabel(state.ACTIVE_SUK) : "SUK"),
+                          mapsLink:satsangForm.mapsLink.trim(),
+                          day:getDayName(date),
+                        });
+                        if (result.success) {
+                          setSatsangConfirm({ ...satsangForm, id:result.id, day:getDayName(date), occasion:t.label });
+                          setSatsangForm({ name:"", mobile:"", venue:"", date:"", time:"", hostedBy:"", mapsLink:"", occasion:"" });
+                          t.fetch();
+                        } else { triggerSatsangError(result.message || "⚠️ Booking failed. Please try again."); }
+                      } catch(e) { triggerSatsangError("⚠️ Network error. Please try again."); }
+                      setSatsangSubmitting(false);
+                    }}
                     style={{
                       width:"100%", padding:"15px", border:"none", borderRadius:13,
-                      background:`linear-gradient(135deg,${t.color} 0%,${t.color}cc 100%)`,
-                      color:"#fff", fontWeight:900, fontSize:16, cursor:"pointer",
+                      background:(satsangForm.date&&satsangForm.time&&isDupSpecial(satsangForm.date,satsangForm.time))?"#e5e7eb":t.btnGrad,
+                      color:(satsangForm.date&&satsangForm.time&&isDupSpecial(satsangForm.date,satsangForm.time))?"#9ca3af":"#fff",
+                      fontWeight:900, fontSize:16,
+                      cursor:(satsangForm.date&&satsangForm.time&&isDupSpecial(satsangForm.date,satsangForm.time))?"not-allowed":"pointer",
                       fontFamily:"'Cinzel',serif", letterSpacing:"0.5px",
-                      boxShadow:`0 5px 22px ${t.color}44`, transition:"all 0.3s",
-                    }}
-                    onClick={() => {
-                      if (!form.name.trim())   { triggerError("⚠️ Please enter your name.");           return; }
-                      if (!/^[0-9]{10}$/.test(form.mobile.trim())) { triggerError("⚠️ Please enter a valid 10-digit mobile number."); return; }
-                      if (!form.date)          { triggerError("⚠️ Please select a date.");             return; }
-                      alert(`✅ Registration received!\n\n${t.icon} ${t.label}\n👤 ${form.name}\n📅 ${form.date}\n\nOur team will contact you shortly. Jayguru 🙏`);
-                      setForm({ name:"", mobile:"", place:"", time:"", date:"", mapsLink:"" });
-                    }}
-                  >
-                    {t.icon}  Register for {t.label}
+                      boxShadow:`0 5px 22px ${t.shadow}`, transition:"all 0.3s",
+                      opacity:satsangSubmitting?0.7:1,
+                    }}>
+                    {satsangSubmitting ? "⏳ Booking..." : `${t.icon}  Register for ${t.label}`}
                   </button>
                 </div>
+
               </div>
             );
           })()}
+
 
           {/* ── Inline Cancel Section ── */}
           {feat.cancelBooking && (<div style={{ marginTop:20 }}>
@@ -1686,27 +2122,33 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   return (
                   <div style={{ marginTop:12, display:"flex", flexDirection:"column", gap:8 }}>
                     {futureCancelResults.map(b => {
-                      const isSatsang = b._type === "satsang";
-                      if (isSatsang) {
+                      const isPrayer = b._type === "prayer" || !b._type;
+                      const TC2 = {
+                        satsang:{ badge:"🪔 Satsang",  bg:"#fffbeb",               border:"rgba(217,119,6,0.25)",  name:"#78350f", time:"#d97706", grad:"linear-gradient(135deg,#92400e,#d97706)",  label:"Cancel Satsang"  },
+                        bhadra: { badge:"🌸 Bhadra",   bg:"rgba(245,243,255,0.9)", border:"rgba(109,40,217,0.25)", name:"#4c1d95", time:"#7c3aed", grad:"linear-gradient(135deg,#5b21b6,#7c3aed)",  label:"Cancel Bhadra"   },
+                        matri:  { badge:"🌺 Matri",    bg:"rgba(253,242,248,0.9)", border:"rgba(190,24,93,0.25)",  name:"#831843", time:"#db2777", grad:"linear-gradient(135deg,#9d174d,#db2777)",  label:"Cancel Matri"    },
+                        savan:  { badge:"🌿 Savan",    bg:"rgba(240,253,244,0.9)", border:"rgba(21,128,61,0.25)",  name:"#14532d", time:"#16a34a", grad:"linear-gradient(135deg,#14532d,#16a34a)",  label:"Cancel Savan"    },
+                      };
+                      if (!isPrayer) {
+                        const tc2 = TC2[b._type] || TC2.satsang;
                         return (
-                          <div key={b.id} style={{ background:"#fffbeb", borderRadius:12,
-                            padding:"14px", border:"1px solid rgba(217,119,6,0.25)" }}>
+                          <div key={b.id} style={{ background:tc2.bg, borderRadius:12,
+                            padding:"14px", border:`1px solid ${tc2.border}` }}>
                             <div style={{ marginBottom:2 }}>
-                              <span style={{ fontSize:10, fontWeight:800, color:"#92400e",
-                                background:"rgba(217,119,6,0.12)", padding:"2px 7px",
-                                borderRadius:10, textTransform:"uppercase", letterSpacing:"0.5px" }}>🪔 Satsang</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:tc2.time,
+                                background:`${tc2.border}`, padding:"2px 7px",
+                                borderRadius:10, textTransform:"uppercase", letterSpacing:"0.5px" }}>{tc2.badge}</span>
                             </div>
-                            <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800, color:"#78350f", fontSize:13 }}>{b.name}</div>
-                            <div style={{ fontSize:12, color:"#d97706", fontWeight:700, marginTop:2 }}>
+                            <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800, color:tc2.name, fontSize:13 }}>{b.name}</div>
+                            <div style={{ fontSize:12, color:tc2.time, fontWeight:700, marginTop:2 }}>
                               📅 {formatDateWithDay(b.date)} · ⏰ {cleanTime(b.time)}
                             </div>
                             {b.venue && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>📍 {b.venue}</div>}
-                            <button disabled={cancelling === b.id} onClick={() => handleCancelSatsang(b.id)}
+                            <button disabled={cancelling === b.id} onClick={() => handleCancelSpecial(b.id, b._type)}
                               style={{ marginTop:10, width:"100%", padding:"9px", border:"none", borderRadius:9,
-                                background:"linear-gradient(135deg,#92400e,#d97706)",
-                                color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
+                                background:tc2.grad, color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
                                 opacity:cancelling === b.id ? 0.6 : 1 }}>
-                              {cancelling === b.id ? "⏳ Cancelling..." : "🗑️  Cancel This Satsang"}
+                              {cancelling === b.id ? "⏳ Cancelling..." : `🗑️ ${tc2.label}`}
                             </button>
                           </div>
                         );
@@ -1725,13 +2167,9 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                             {c.icon} {b.time} Prayer · {formatDateWithDay(b.date)}
                           </div>
                           {b.prayerTime && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕐 {cleanTime(b.prayerTime)}</div>}
-                          <button disabled={cancelling === b.id} onClick={() => handleCancelBooking(b.id)}
-                            style={{ marginTop:10, width:"100%", padding:"9px", border:"none", borderRadius:9,
-                              background:"linear-gradient(135deg,#dc2626,#ef4444)",
-                              color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
-                              opacity:cancelling === b.id ? 0.6 : 1 }}>
-                            {cancelling === b.id ? "⏳ Cancelling..." : "🗑️  Cancel This Booking"}
-                          </button>
+                          <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", fontStyle:"italic", textAlign:"center" }}>
+                            ✅ This prayer has already passed
+                          </div>
                         </div>
                       );
                     })}
@@ -1749,52 +2187,51 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                         {showCancelPast && (
                           <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:8, opacity:0.75 }}>
                             {pastCancelResults.map(b => {
-                      const isSatsang = b._type === "satsang";
-                      if (isSatsang) {
+                      const isPrayer2 = b._type === "prayer" || !b._type;
+                      const TC3 = {
+                        satsang:{ badge:"🪔 Satsang", bg:"#fffbeb",               border:"rgba(217,119,6,0.25)",  name:"#78350f", time:"#d97706" },
+                        bhadra: { badge:"🌸 Bhadra",  bg:"rgba(245,243,255,0.9)", border:"rgba(109,40,217,0.25)", name:"#4c1d95", time:"#7c3aed" },
+                        matri:  { badge:"🌺 Matri",   bg:"rgba(253,242,248,0.9)", border:"rgba(190,24,93,0.25)",  name:"#831843", time:"#db2777" },
+                        savan:  { badge:"🌿 Savan",   bg:"rgba(240,253,244,0.9)", border:"rgba(21,128,61,0.25)",  name:"#14532d", time:"#16a34a" },
+                      };
+                      if (!isPrayer2) {
+                        const tc3 = TC3[b._type] || TC3.satsang;
                         return (
-                          <div key={b.id} style={{ background:"#fffbeb", borderRadius:12,
-                            padding:"14px", border:"1px solid rgba(217,119,6,0.25)" }}>
+                          <div key={b.id} style={{ background:tc3.bg, borderRadius:12,
+                            padding:"14px", border:`1px solid ${tc3.border}`, opacity:0.75 }}>
                             <div style={{ marginBottom:2 }}>
-                              <span style={{ fontSize:10, fontWeight:800, color:"#92400e",
-                                background:"rgba(217,119,6,0.12)", padding:"2px 7px",
-                                borderRadius:10, textTransform:"uppercase", letterSpacing:"0.5px" }}>🪔 Satsang</span>
+                              <span style={{ fontSize:10, fontWeight:800, color:tc3.time,
+                                background:tc3.border, padding:"2px 7px",
+                                borderRadius:10, textTransform:"uppercase", letterSpacing:"0.5px" }}>{tc3.badge}</span>
                             </div>
-                            <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800, color:"#78350f", fontSize:13 }}>{b.name}</div>
-                            <div style={{ fontSize:12, color:"#d97706", fontWeight:700, marginTop:2 }}>
+                            <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800, color:tc3.name, fontSize:13 }}>{b.name}</div>
+                            <div style={{ fontSize:12, color:tc3.time, fontWeight:700, marginTop:2 }}>
                               📅 {formatDateWithDay(b.date)} · ⏰ {cleanTime(b.time)}
                             </div>
                             {b.venue && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>📍 {b.venue}</div>}
-                            <button disabled={cancelling === b.id} onClick={() => handleCancelSatsang(b.id)}
-                              style={{ marginTop:10, width:"100%", padding:"9px", border:"none", borderRadius:9,
-                                background:"linear-gradient(135deg,#92400e,#d97706)",
-                                color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
-                                opacity:cancelling === b.id ? 0.6 : 1 }}>
-                              {cancelling === b.id ? "⏳ Cancelling..." : "🗑️  Cancel This Satsang"}
-                            </button>
+                            <div style={{ marginTop:8, fontSize:11, color:"#6b7280", fontStyle:"italic" }}>
+                              ✅ This event has already passed
+                            </div>
                           </div>
                         );
                       }
                       const c = SLOT_STYLE[b.time] || SLOT_STYLE["Morning"];
                       return (
-                        <div key={b.id} style={{ background:"#fff", borderRadius:12,
-                          padding:"14px", border:"1px solid rgba(220,38,38,0.2)" }}>
+                        <div key={b.id} style={{ background:"#f8fafc", borderRadius:12,
+                          padding:"14px", border:"1px solid rgba(148,163,184,0.3)", opacity:0.75 }}>
                           <div style={{ marginBottom:2 }}>
-                            <span style={{ fontSize:10, fontWeight:800, color:"#1d4ed8",
-                              background:"rgba(29,78,216,0.08)", padding:"2px 7px",
-                              borderRadius:10, textTransform:"uppercase", letterSpacing:"0.5px" }}>🙏 Prayer</span>
+                            <span style={{ fontSize:10, fontWeight:800, color:"#64748b",
+                              background:"rgba(100,116,139,0.1)", padding:"2px 7px",
+                              borderRadius:10, textTransform:"uppercase", letterSpacing:"0.5px" }}>🙏 Prayer (Past)</span>
                           </div>
-                          <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800, color:"#1e3a8a", fontSize:13 }}>{b.name}</div>
-                          <div style={{ fontSize:12, color:c.color, fontWeight:700, marginTop:2 }}>
+                          <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800, color:"#475569", fontSize:13 }}>{b.name}</div>
+                          <div style={{ fontSize:12, color:"#64748b", fontWeight:700, marginTop:2 }}>
                             {c.icon} {b.time} Prayer · {formatDateWithDay(b.date)}
                           </div>
-                          {b.prayerTime && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕐 {cleanTime(b.prayerTime)}</div>}
-                          <button disabled={cancelling === b.id} onClick={() => handleCancelBooking(b.id)}
-                            style={{ marginTop:10, width:"100%", padding:"9px", border:"none", borderRadius:9,
-                              background:"linear-gradient(135deg,#dc2626,#ef4444)",
-                              color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
-                              opacity:cancelling === b.id ? 0.6 : 1 }}>
-                            {cancelling === b.id ? "⏳ Cancelling..." : "🗑️  Cancel This Booking"}
-                          </button>
+                          {b.prayerTime && <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>🕐 {cleanTime(b.prayerTime)}</div>}
+                          <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", fontStyle:"italic" }}>
+                            ✅ This prayer has already passed
+                          </div>
                         </div>
                       );
                             })}
@@ -1853,6 +2290,36 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                 </button>
               </div>
             </div>
+            {/* Booking type filter */}
+            <div>
+              <label className="divine-label">📋 Booking Type</label>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
+                {[
+                  { id:"prayer",  label:"Prayer",  icon:"🙏", color:"#1d4ed8" },
+                  feat.satsangBooking && { id:"satsang", label:"Satsang", icon:"🪔", color:"#92400e" },
+                  feat.bhadraBooking  && { id:"bhadra",  label:"Bhadra",  icon:"🌸", color:"#6d28d9" },
+                  feat.matriBooking   && { id:"matri",   label:"Matri",   icon:"🌺", color:"#be185d" },
+                  feat.savanBooking   && { id:"savan",   label:"Savan",   icon:"🌿", color:"#15803d" },
+                  { id:"all",     label:"All",     icon:"📋", color:"#1e3a8a" },
+                ].filter(Boolean).map(t => {
+                  const active = retrieveTypeFilter === t.id;
+                  return (
+                    <button key={t.id} type="button"
+                      onClick={() => { setRetrieveTypeFilter(t.id); setShareResults(null); setShareMsg(""); }}
+                      style={{ padding:"8px 4px", borderRadius:10, border:"none", cursor:"pointer",
+                        fontFamily:"'Cinzel',serif", fontSize:10, fontWeight:800,
+                        transition:"all 0.15s",
+                        background: active ? `linear-gradient(135deg,${t.color}dd,${t.color})` : "rgba(239,246,255,0.7)",
+                        color: active ? "#fff" : "rgba(29,78,216,0.5)",
+                        boxShadow: active ? `0 2px 8px ${t.color}44` : "none",
+                        outline: active ? "none" : "1px solid rgba(59,130,246,0.15)" }}>
+                      <div style={{ fontSize:14 }}>{t.icon}</div>
+                      <div>{t.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Message */}
@@ -1879,13 +2346,21 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                 {shareResults.length} Booking{shareResults.length > 1 ? "s" : ""} Found
                 <span style={{ fontSize:11, color:"rgba(29,78,216,0.4)", fontWeight:400,
                   marginLeft:8, textTransform:"none" }}>
-                  ({shareResults.filter(b=>b._type==="prayer").length} Prayer ·{" "}
-                   {shareResults.filter(b=>b._type==="satsang").length} Satsang)
+                  ({shareResults.filter(b=>b._type==="prayer").length} Prayer
+                  {shareResults.filter(b=>b._type==="satsang").length > 0 ? ` · ${shareResults.filter(b=>b._type==="satsang").length} Satsang` : ""}
+                  {shareResults.filter(b=>b._type==="bhadra").length > 0 ? ` · ${shareResults.filter(b=>b._type==="bhadra").length} Bhadra` : ""}
+                  {shareResults.filter(b=>b._type==="matri").length > 0 ? ` · ${shareResults.filter(b=>b._type==="matri").length} Matri` : ""}
+                  {shareResults.filter(b=>b._type==="savan").length > 0 ? ` · ${shareResults.filter(b=>b._type==="savan").length} Savan` : ""})
                 </span>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                 {displayResults.map(b => {
-                  const isSatsang = b._type === "satsang";
+                  const isSatsang = (b._type === "satsang" || b._type === "bhadra" || b._type === "matri" || b._type === "savan");
+                  const typeLabels = { satsang:"🪔 Satsang", bhadra:"🌸 Bhadra Parikrama", matri:"🌺 Matri-Sammelan", savan:"🌿 Savan Parikrama" };
+                  const typeColors = { satsang:"#92400e", bhadra:"#6d28d9", matri:"#be185d", savan:"#15803d" };
+                  const typeBgs   = { satsang:"rgba(217,119,6,0.12)", bhadra:"rgba(109,40,217,0.1)", matri:"rgba(190,24,93,0.1)", savan:"rgba(21,128,61,0.1)" };
+                  const typeBars  = { satsang:"linear-gradient(90deg,#78350f,#d97706,#fbbf24)", bhadra:"linear-gradient(90deg,#5b21b6,#7c3aed,#a78bfa)", matri:"linear-gradient(90deg,#9d174d,#db2777,#f472b6)", savan:"linear-gradient(90deg,#14532d,#16a34a,#4ade80)" };
+                  const typeBgCard= { satsang:"rgba(255,251,235,0.6)", bhadra:"rgba(245,243,255,0.6)", matri:"rgba(253,242,248,0.6)", savan:"rgba(240,253,244,0.6)" };
 
                   /* ── PRAYER CARD ── */
                   if (!isSatsang) {
@@ -1952,22 +2427,49 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                             )}
                             {editingAddress === b.id && (
                               <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:4 }}>
-                                <input className="divine-input" placeholder="Address or Google Maps link"
-                                  value={editAddressVal} onChange={e=>setEditAddressVal(e.target.value)}
-                                  style={{ fontSize:12, padding:"9px 12px" }} autoFocus/>
+                                <div style={{ fontSize:11, fontWeight:700, color:"rgba(29,78,216,0.55)", textTransform:"uppercase", letterSpacing:"0.6px" }}>
+                                  🌐 Find Location
+                                </div>
+                                <LocationPicker color="#1d4ed8"
+                                  placeholder="Search a place, area or landmark…"
+                                  onPick={({ address, mapsLink }) => {
+                                    if (address)  setEditAddressVal(address);
+                                    if (mapsLink) setEditMapsVal(mapsLink);
+                                  }}/>
+                                <div style={{ fontSize:11, fontWeight:700, color:"rgba(29,78,216,0.55)", textTransform:"uppercase", letterSpacing:"0.6px", marginTop:4 }}>
+                                  Address / Location name
+                                </div>
+                                <input className="divine-input"
+                                  placeholder="e.g. Flat 301, Upkar Manor, Arekere"
+                                  value={editAddressVal}
+                                  onChange={e => setEditAddressVal(e.target.value)}
+                                  style={{ fontSize:13, padding:"10px 12px" }}
+                                  autoFocus/>
+                                <div style={{ fontSize:11, fontWeight:700, color:"rgba(29,78,216,0.55)", textTransform:"uppercase", letterSpacing:"0.6px", marginTop:2 }}>
+                                  Google Maps link (optional)
+                                </div>
+                                <input className="divine-input"
+                                  placeholder="Paste Google Maps link — https://maps.app.goo.gl/..."
+                                  value={editMapsVal}
+                                  onChange={e => setEditMapsVal(e.target.value)}
+                                  style={{ fontSize:13, padding:"10px 12px" }}/>
                                 <div style={{ display:"flex", gap:8 }}>
-                                  <button disabled={savingAddress||!editAddressVal.trim()}
-                                    onClick={() => handleUpdateAddress(b.id, editAddressVal.trim())}
-                                    style={{ flex:1, padding:"9px", border:"none", borderRadius:8,
+                                  <button
+                                    disabled={savingAddress || (!editAddressVal.trim() && !editMapsVal.trim())}
+                                    onClick={() => handleUpdateAddress(b.id, editAddressVal.trim(), editMapsVal.trim())}
+                                    style={{ flex:1, padding:"10px", border:"none", borderRadius:8,
                                       background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",
-                                      color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
-                                      opacity:(savingAddress||!editAddressVal.trim())?0.6:1 }}>
-                                    {savingAddress ? "⏳ Saving..." : "✅ Save"}
+                                      color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
+                                      opacity:(savingAddress||(!editAddressVal.trim()&&!editMapsVal.trim()))?0.6:1 }}>
+                                    {savingAddress ? "Saving..." : "Save address"}
                                   </button>
-                                  <button onClick={()=>setEditingAddress(null)}
-                                    style={{ padding:"9px 14px", border:"1px solid rgba(30,64,175,0.2)",
+                                  <button
+                                    onClick={() => { setEditingAddress(null); setEditAddressVal(""); setEditMapsVal(""); }}
+                                    style={{ padding:"10px 16px", border:"1px solid rgba(30,64,175,0.2)",
                                       borderRadius:8, background:"#fff", color:"#6b7280",
-                                      fontWeight:600, fontSize:12, cursor:"pointer" }}>Cancel</button>
+                                      fontWeight:600, fontSize:13, cursor:"pointer" }}>
+                                    Cancel
+                                  </button>
                                 </div>
                               </div>
                             )}
@@ -2009,18 +2511,25 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                             </button>
                           </div>
 
-                          {/* Cancel prayer */}
-                          <div style={{ marginTop:10 }}>
-                            <button
-                              disabled={cancelling === b.id}
-                              onClick={() => handleCancelBooking(b.id)}
-                              style={{ width:"100%", padding:"10px", border:"1px solid rgba(220,38,38,0.3)",
-                                borderRadius:10, background:"rgba(254,242,242,0.8)",
-                                color:"#b91c1c", fontWeight:700, fontSize:12, cursor:"pointer",
-                                opacity: cancelling===b.id ? 0.6 : 1 }}>
-                              {cancelling===b.id ? "⏳ Cancelling..." : "❌ Cancel This Booking"}
-                            </button>
-                          </div>
+                          {/* Cancel prayer — only for future dates */}
+                          {b.date >= getTodayStr() && (
+                            <div style={{ marginTop:10 }}>
+                              <button
+                                disabled={cancelling === b.id}
+                                onClick={() => handleCancelBooking(b.id)}
+                                style={{ width:"100%", padding:"10px", border:"1px solid rgba(220,38,38,0.3)",
+                                  borderRadius:10, background:"rgba(254,242,242,0.8)",
+                                  color:"#b91c1c", fontWeight:700, fontSize:12, cursor:"pointer",
+                                  opacity: cancelling===b.id ? 0.6 : 1 }}>
+                                {cancelling===b.id ? "⏳ Cancelling..." : "❌ Cancel This Booking"}
+                              </button>
+                            </div>
+                          )}
+                          {b.date < getTodayStr() && (
+                            <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", fontStyle:"italic", textAlign:"center" }}>
+                              ✅ This prayer has already passed
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -2031,23 +2540,25 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                   return (
                     <div key={b.id} style={{ border:"1.5px solid rgba(217,119,6,0.25)",
                       borderRadius:16, overflow:"hidden",
-                      background:"rgba(255,251,235,0.6)" }}>
-                      {/* Amber top bar */}
-                      <div style={{ height:4, background:"linear-gradient(90deg,#78350f,#d97706,#fbbf24)" }}/>
+                      background:typeBgCard[b._type]||"rgba(255,251,235,0.6)" }}>
+                      {/* Type-coloured top bar */}
+                      <div style={{ height:4, background:typeBars[b._type]||"linear-gradient(90deg,#78350f,#d97706,#fbbf24)" }}/>
                       <div style={{ padding:"14px 16px" }}>
-                        {/* Type badge + ID */}
+                        {/* Type badge */}
                         <div style={{ marginBottom:10 }}>
-                          <span style={{ fontSize:10, fontWeight:800, color:"#92400e",
-                            background:"rgba(217,119,6,0.12)", padding:"3px 9px",
-                            borderRadius:20, letterSpacing:"1px", textTransform:"uppercase" }}>
-                            🪔 Satsang Booking
+                          <span style={{ fontSize:10, fontWeight:800,
+                            color:typeColors[b._type]||"#92400e",
+                            background:typeBgs[b._type]||"rgba(217,119,6,0.12)",
+                            padding:"3px 9px", borderRadius:20,
+                            letterSpacing:"1px", textTransform:"uppercase" }}>
+                            {typeLabels[b._type]||"🪔 Satsang"} Booking
                           </span>
                         </div>
                         {/* Details */}
                         <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
-                          color:"#78350f", fontSize:14, marginBottom:4 }}>{b.name}</div>
-                        <div style={{ fontSize:13, color:"#d97706", fontWeight:700 }}>
-                          📅 {b.day ? b.day+", " : ""}{formatDate ? formatDate(b.date) : b.date}
+                          color:typeColors[b._type]||"#78350f", fontSize:14, marginBottom:4 }}>{b.name}</div>
+                        <div style={{ fontSize:13, color:typeColors[b._type]||"#d97706", fontWeight:700 }}>
+                          📅 {formatDateWithDay(b.date)}
                         </div>
                         <div style={{ fontSize:12, color:"#6b7280", marginTop:3 }}>
                           ⏰ {cleanTime(b.time)} onwards
@@ -2055,7 +2566,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                         </div>
                         {b.mapsLink && (
                           <a href={b.mapsLink} target="_blank" rel="noopener noreferrer"
-                            style={{ fontSize:12, color:"#d97706", fontWeight:600,
+                            style={{ fontSize:12, color:typeColors[b._type]||"#d97706", fontWeight:600,
                               textDecoration:"none", display:"block", marginTop:3 }}>
                             🗺️ View on Map
                           </a>
@@ -2101,18 +2612,25 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                           </button>
                         </div>
 
-                        {/* Cancel satsang */}
-                        <div style={{ marginTop:10 }}>
-                          <button
-                            disabled={cancelling === b.id}
-                            onClick={() => handleCancelSatsang(b.id)}
-                            style={{ width:"100%", padding:"10px", border:"1px solid rgba(217,119,6,0.3)",
-                              borderRadius:10, background:"rgba(255,251,235,0.9)",
-                              color:"#92400e", fontWeight:700, fontSize:12, cursor:"pointer",
-                              opacity: cancelling===b.id ? 0.6 : 1 }}>
-                            {cancelling===b.id ? "⏳ Cancelling..." : "❌ Cancel This Satsang"}
-                          </button>
-                        </div>
+                        {/* Cancel satsang/special — only for future dates */}
+                        {b.date >= getTodayStr() && (
+                          <div style={{ marginTop:10 }}>
+                            <button
+                              disabled={cancelling === b.id}
+                              onClick={() => handleCancelSpecial(b.id, b._type)}
+                              style={{ width:"100%", padding:"10px", border:`1px solid ${typeColors[b._type]||"#92400e"}44`,
+                                borderRadius:10, background:`${typeBgCard[b._type]||"rgba(255,251,235,0.9)"}`,
+                                color:typeColors[b._type]||"#92400e", fontWeight:700, fontSize:12, cursor:"pointer",
+                                opacity: cancelling===b.id ? 0.6 : 1 }}>
+                              {cancelling===b.id ? "⏳ Cancelling..." : `❌ Cancel This ${b._type==='bhadra'?'Bhadra':b._type==='matri'?'Matri':b._type==='savan'?'Savan':'Satsang'}`}
+                            </button>
+                          </div>
+                        )}
+                        {b.date < getTodayStr() && (
+                          <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", fontStyle:"italic", textAlign:"center" }}>
+                            ✅ This event has already passed
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -2132,7 +2650,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                     {showRetrievePast && (
                       <div style={{ display:"flex", flexDirection:"column", gap:14, marginTop:12 }}>
                         {pastResults.map(b => {
-                          const isSatsang2 = b._type === "satsang";
+                          const isSatsang2 = (b._type === "satsang" || b._type === "bhadra" || b._type === "matri" || b._type === "savan");
                           if (!isSatsang2) {
                             const sc2 = SLOT_STYLE[b.time] || SLOT_STYLE["Morning"];
                             const placeStr2 = b.place || "";
@@ -2181,31 +2699,35 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                               background:"rgba(250,247,235,0.7)" }}>
                               <div style={{ height:4, background:"linear-gradient(90deg,#94a3b8,#cbd5e1,#e2e8f0)" }}/>
                               <div style={{ padding:"14px 16px" }}>
-                                <div style={{ marginBottom:8 }}>
-                                  <span style={{ fontSize:10, fontWeight:800, color:"#92400e",
-                                    background:"rgba(217,119,6,0.1)", padding:"3px 9px",
-                                    borderRadius:20, letterSpacing:"1px", textTransform:"uppercase" }}>
-                                    🪔 Satsang · Past
-                                  </span>
-                                </div>
-                                <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
-                                  color:"#78350f", fontSize:14, marginBottom:4 }}>{b.name}</div>
-                                <div style={{ fontSize:13, color:"#d97706", fontWeight:700, opacity:0.8 }}>
-                                  📅 {b.day ? b.day+", " : ""}{formatDate ? formatDate(b.date) : b.date}
-                                </div>
-                                <div style={{ fontSize:12, color:"#6b7280", marginTop:3 }}>
-                                  ⏰ {cleanTime(b.time)} onwards
-                                  {b.venue && ` · 📍 ${b.venue}`}
-                                </div>
-                                <div style={{ marginTop:10 }}>
-                                  <button disabled={cancelling === b.id} onClick={() => handleCancelSatsang(b.id)}
-                                    style={{ width:"100%", padding:"10px", border:"1px solid rgba(217,119,6,0.3)",
-                                      borderRadius:10, background:"rgba(255,251,235,0.9)",
-                                      color:"#92400e", fontWeight:700, fontSize:12, cursor:"pointer",
-                                      opacity: cancelling===b.id ? 0.6 : 1 }}>
-                                    {cancelling===b.id ? "⏳ Cancelling..." : "❌ Cancel This Satsang"}
-                                  </button>
-                                </div>
+                                {(() => {
+                                  const ptl = { satsang:"🪔 Satsang", bhadra:"🌸 Bhadra", matri:"🌺 Matri", savan:"🌿 Savan" };
+                                  const ptc = { satsang:"#92400e", bhadra:"#6d28d9", matri:"#be185d", savan:"#15803d" };
+                                  const ptb = { satsang:"rgba(217,119,6,0.1)", bhadra:"rgba(109,40,217,0.1)", matri:"rgba(190,24,93,0.1)", savan:"rgba(21,128,61,0.1)" };
+                                  const lbl = ptl[b._type] || "🪔 Satsang";
+                                  const clr = ptc[b._type] || "#92400e";
+                                  const bg  = ptb[b._type] || "rgba(217,119,6,0.1)";
+                                  return (<>
+                                    <div style={{ marginBottom:8 }}>
+                                      <span style={{ fontSize:10, fontWeight:800, color:clr,
+                                        background:bg, padding:"3px 9px",
+                                        borderRadius:20, letterSpacing:"1px", textTransform:"uppercase" }}>
+                                        {lbl} · Past
+                                      </span>
+                                    </div>
+                                    <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
+                                      color:clr, fontSize:14, marginBottom:4 }}>{b.name}</div>
+                                    <div style={{ fontSize:13, color:clr, fontWeight:700, opacity:0.8 }}>
+                                      📅 {formatDateWithDay(b.date)}
+                                    </div>
+                                    <div style={{ fontSize:12, color:"#6b7280", marginTop:3 }}>
+                                      ⏰ {cleanTime(b.time)} onwards
+                                      {b.venue && ` · 📍 ${b.venue}`}
+                                    </div>
+                                    <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", fontStyle:"italic", textAlign:"center" }}>
+                                      ✅ This event has already passed
+                                    </div>
+                                  </>);
+                                })()}
                               </div>
                             </div>
                           );
@@ -2235,87 +2757,98 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
         const todayStr = getTodayStr();
 
         const AllBookingsView = () => {
-          const nowYM = todayStr.slice(0, 7); // "YYYY-MM"
+          const nowYM = todayStr.slice(0, 7);
           const [activeYM,  setActiveYM]  = React.useState(nowYM);
-          const [typeTab,   setTypeTab]   = React.useState("all"); // all|prayer|satsang
+          const [typeTab,   setTypeTab]   = React.useState(allBookingsFilter || "all");
           const [search,    setSearch]    = React.useState("");
           const [showPast,  setShowPast]  = React.useState(false);
+          const [dateFrom,  setDateFrom]  = React.useState("");
+          const [dateTo,    setDateTo]    = React.useState("");
+          const [showRange, setShowRange] = React.useState(false);
+
+          // Sync with pill click filter
+          React.useEffect(() => {
+            if (allBookingsFilter && allBookingsFilter !== "all") {
+              setTypeTab(allBookingsFilter);
+            }
+          }, [allBookingsFilter]);
 
           const allItems = [
-            ...bookings.map(b       => ({ ...b, _type:"prayer"  })),
+            ...bookings.map(b        => ({ ...b, _type:"prayer"  })),
             ...satsangBookings.map(b => ({ ...b, _type:"satsang" })),
+            ...(feat.bhadraBooking ? bhadraBookings.map(b => ({ ...b, _type:"bhadra" })) : []),
+            ...(feat.matriBooking  ? matriBookings.map(b  => ({ ...b, _type:"matri"  })) : []),
+            ...(feat.savanBooking  ? savanBookings.map(b  => ({ ...b, _type:"savan"  })) : []),
           ];
 
-          // All YYYY-MM months that have data, sorted asc
           const allMonths = React.useMemo(() => {
             const seen = new Set(allItems.map(b => (b.date||"").slice(0,7)).filter(Boolean));
-            // always include current month even if empty
             seen.add(nowYM);
             return Array.from(seen).sort();
-          }, [bookings, satsangBookings]);
+          }, [bookings, satsangBookings, bhadraBookings, matriBookings, savanBookings]);
 
           const monthIdx = allMonths.indexOf(activeYM);
-
           const goPrev = () => { if (monthIdx > 0) setActiveYM(allMonths[monthIdx - 1]); };
           const goNext = () => { if (monthIdx < allMonths.length - 1) setActiveYM(allMonths[monthIdx + 1]); };
-
-          const monthLabel = new Date(activeYM + "-01T00:00:00")
-            .toLocaleDateString("en-IN", { month:"long", year:"numeric" });
+          const monthLabel = new Date(activeYM + "-01T00:00:00").toLocaleDateString("en-IN", { month:"long", year:"numeric" });
 
           const isSearching = search.trim().length > 0;
+          const isRangeActive = showRange && (dateFrom || dateTo);
 
-          // When searching — spans ALL months; otherwise current month only (today + future)
+          const typeMatch = (b) => {
+            if (typeTab === "all")     return true;
+            return b._type === typeTab;
+          };
+
           const filtered = allItems.filter(b => {
-            if (typeTab === "prayer"  && b._type !== "prayer")  return false;
-            if (typeTab === "satsang" && b._type !== "satsang") return false;
+            if (!typeMatch(b)) return false;
             if (isSearching) {
               const q = search.toLowerCase();
               return (b.name||"").toLowerCase().includes(q)
+                  || (b.mobile||"").includes(q)
                   || (b.venue||"").toLowerCase().includes(q)
-                  || (b.hostedBy||"").toLowerCase().includes(q);
+                  || (b.place||"").toLowerCase().includes(q);
             }
-            // Only today and future dates in the list
+            if (isRangeActive) {
+              const d = b.date || "";
+              if (dateFrom && d < dateFrom) return false;
+              if (dateTo   && d > dateTo)   return false;
+              return true;
+            }
             return (b.date||"").startsWith(activeYM) && (b.date||"") >= todayStr;
           }).sort((a, b) => (a.date||"").localeCompare(b.date||""));
 
-          // Past items for the active month/type (excluded from main list)
-          const pastFiltered = isSearching ? [] : allItems.filter(b => {
-            if (typeTab === "prayer"  && b._type !== "prayer")  return false;
-            if (typeTab === "satsang" && b._type !== "satsang") return false;
+          const pastFiltered = (isSearching || isRangeActive) ? [] : allItems.filter(b => {
+            if (!typeMatch(b)) return false;
             return (b.date||"").startsWith(activeYM) && (b.date||"") < todayStr;
-          }).sort((a, b) => (b.date||"").localeCompare(a.date||"")); // newest first
+          }).sort((a, b) => (b.date||"").localeCompare(a.date||""));
 
-          // Group past by date
           const pastGroups = {};
-          pastFiltered.forEach(b => {
-            const d = b.date || "Unknown";
-            if (!pastGroups[d]) pastGroups[d] = [];
-            pastGroups[d].push(b);
-          });
+          pastFiltered.forEach(b => { const d = b.date||"Unknown"; if (!pastGroups[d]) pastGroups[d]=[]; pastGroups[d].push(b); });
           const pastSortedDates = Object.keys(pastGroups).sort((a,b) => b.localeCompare(a));
 
-          // Group by date
           const groups = {};
-          filtered.forEach(b => {
-            const d = b.date || "Unknown";
-            if (!groups[d]) groups[d] = [];
-            groups[d].push(b);
-          });
+          filtered.forEach(b => { const d = b.date||"Unknown"; if (!groups[d]) groups[d]=[]; groups[d].push(b); });
           const sortedDates = Object.keys(groups).sort();
 
-          // Counts for type tabs
           const monthItems = allItems.filter(b => (b.date||"").startsWith(activeYM));
           const counts = {
             all:     monthItems.length,
             prayer:  monthItems.filter(b => b._type==="prayer").length,
             satsang: monthItems.filter(b => b._type==="satsang").length,
+            bhadra:  monthItems.filter(b => b._type==="bhadra").length,
+            matri:   monthItems.filter(b => b._type==="matri").length,
+            savan:   monthItems.filter(b => b._type==="savan").length,
           };
 
           const TYPE_TABS = [
-            { id:"all",     label:"All",     icon:"📋" },
-            { id:"prayer",  label:"Prayer",  icon:"🙏" },
-            { id:"satsang", label:"Satsang", icon:"🪔" },
-          ];
+            { id:"all",     label:"All",     icon:"📋", color:"#1e3a8a" },
+            { id:"prayer",  label:"Prayer",  icon:"🙏", color:"#1d4ed8" },
+            feat.satsangBooking && { id:"satsang", label:"Satsang", icon:"🪔", color:"#92400e" },
+            feat.bhadraBooking  && { id:"bhadra",  label:"Bhadra",  icon:"🌸", color:"#6d28d9" },
+            feat.matriBooking   && { id:"matri",   label:"Matri",   icon:"🌺", color:"#be185d" },
+            feat.savanBooking   && { id:"savan",   label:"Savan",   icon:"🌿", color:"#15803d" },
+          ].filter(Boolean);
 
           return (
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -2368,35 +2901,65 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                 </div>
 
                 )}
-                {/* Row 2: All | Prayer | Satsang tabs */}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr",
-                  gap:6, marginBottom:12 }}>
+                {/* Row 2: All | Prayer | Satsang | Bhadra | Matri | Savan */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6, marginBottom:12 }}>
                   {TYPE_TABS.map(t => {
                     const active = typeTab === t.id;
                     return (
-                      <button key={t.id} onClick={() => setTypeTab(t.id)}
-                        style={{ padding:"9px 0", borderRadius:12,
+                      <button key={t.id} onClick={() => { setTypeTab(t.id); setAllBookingsFilter(t.id); }}
+                        style={{ padding:"8px 4px", borderRadius:12,
                           cursor:"pointer", fontFamily:"'Cinzel',serif",
-                          fontSize:12, fontWeight:800, transition:"all 0.18s",
-                          background: active
-                            ? t.id==="satsang" ? "linear-gradient(135deg,#78350f,#d97706)"
-                              : t.id==="prayer" ? "linear-gradient(135deg,#1d4ed8,#3b82f6)"
-                              : "linear-gradient(135deg,#1e3a8a,#3b82f6)"
-                            : "rgba(239,246,255,0.7)",
+                          fontSize:10, fontWeight:800, transition:"all 0.18s",
+                          background: active ? `linear-gradient(135deg,${t.color}dd,${t.color})` : "rgba(239,246,255,0.7)",
                           color: active ? "#fff" : "rgba(29,78,216,0.5)",
-                          boxShadow: active ? "0 3px 12px rgba(29,78,216,0.2)" : "none",
+                          boxShadow: active ? `0 3px 12px ${t.color}44` : "none",
                           border: active ? "none" : "1px solid rgba(59,130,246,0.15)" }}>
-                        <div>{t.icon}</div>
-                        <div style={{ fontSize:11 }}>{t.label}</div>
-                        <div style={{ fontSize:10, marginTop:1,
-                          opacity: active ? 0.85 : 0.55,
-                          color: active ? "#fff" : "#1d4ed8",
-                          fontFamily:"sans-serif", fontWeight:700 }}>
-                          {counts[t.id]}
+                        <div style={{ fontSize:13 }}>{t.icon}</div>
+                        <div style={{ fontSize:10 }}>{t.label}</div>
+                        <div style={{ fontSize:10, marginTop:1, opacity:active?0.9:0.55,
+                          color:active?"#fff":t.color, fontFamily:"sans-serif", fontWeight:700 }}>
+                          {counts[t.id] ?? 0}
                         </div>
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Date range filter */}
+                <div style={{ marginBottom:10 }}>
+                  <button onClick={() => setShowRange(r => !r)}
+                    style={{ width:"100%", padding:"8px 12px", borderRadius:10,
+                      background: showRange ? "rgba(29,78,216,0.1)" : "rgba(239,246,255,0.7)",
+                      border:"1px solid rgba(59,130,246,0.2)", cursor:"pointer",
+                      fontSize:12, color:"rgba(29,78,216,0.65)", fontWeight:700,
+                      display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                    <span>📅 Filter by date range {isRangeActive ? `(${dateFrom||"any"} → ${dateTo||"any"})` : ""}</span>
+                    <span>{showRange ? "▲" : "▼"}</span>
+                  </button>
+                  {showRange && (
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:8 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:"rgba(29,78,216,0.5)", fontWeight:700, marginBottom:3 }}>FROM</div>
+                        <input type="date" className="divine-input" value={dateFrom}
+                          style={{ fontSize:12, padding:"8px 10px" }}
+                          onChange={e => setDateFrom(e.target.value)}/>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:10, color:"rgba(29,78,216,0.5)", fontWeight:700, marginBottom:3 }}>TO</div>
+                        <input type="date" className="divine-input" value={dateTo}
+                          style={{ fontSize:12, padding:"8px 10px" }}
+                          onChange={e => setDateTo(e.target.value)}/>
+                      </div>
+                      {isRangeActive && (
+                        <button onClick={() => { setDateFrom(""); setDateTo(""); }}
+                          style={{ gridColumn:"1/-1", padding:"7px", borderRadius:8, border:"none",
+                            background:"rgba(239,246,255,0.8)", color:"rgba(29,78,216,0.6)",
+                            fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                          ✕ Clear date range
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Row 3: Search */}
@@ -2515,82 +3078,149 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
                                         <div style={{ fontSize:12, color:"#374151", fontWeight:600 }}>📱 {b.mobile}</div>
                                         <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🪪 {b.id}</div>
                                         {b.bookedAt && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕒 {b.bookedAt}</div>}
-                                        <button
-                                          disabled={cancelling === b.id}
-                                          onClick={() => handleCancelBooking(b.id)}
-                                          style={{ marginTop:8, width:"100%", padding:"7px", border:"none", borderRadius:8,
-                                            background:"linear-gradient(135deg,#dc2626,#ef4444)",
-                                            color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
-                                            opacity: cancelling===b.id ? 0.6 : 1 }}>
-                                          {cancelling===b.id ? "⏳ Cancelling..." : "🗑️ Cancel Booking"}
-                                        </button>
+                                        {/* Share invitation */}
+                                        {(() => {
+                                          const placeStr = b.place || "";
+                                          const urlM = placeStr.match(/(https?:\/\/[^\s]+)/);
+                                          const mLink = urlM ? urlM[1] : "";
+                                          const cPlace = mLink ? placeStr.replace(mLink,"").trim() : placeStr;
+                                          const sc2 = { name:b.name, mobile:b.mobile, time:b.time, date:b.date, prayerTime:cleanTime(b.prayerTime), place:cPlace||placeStr, mapsLink:mLink, id:b.id };
+                                          return (
+                                            <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:5 }}>
+                                              <div style={{ fontSize:10, fontWeight:700, color:"rgba(29,78,216,0.5)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:2 }}>📤 Share Invitation</div>
+                                              <a href={`https://wa.me/?text=${buildShareMsg(sc2)}`} target="_blank" rel="noopener noreferrer"
+                                                style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                                                  padding:"7px", borderRadius:8, textDecoration:"none",
+                                                  background:"linear-gradient(135deg,#25D366,#128C7E)",
+                                                  color:"#fff", fontWeight:700, fontSize:12 }}>
+                                                💬 WhatsApp
+                                              </a>
+                                              <a href={`sms:${b.mobile}?body=${buildShareMsg(sc2)}`}
+                                                style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                                                  padding:"7px", borderRadius:8, textDecoration:"none",
+                                                  background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",
+                                                  color:"#fff", fontWeight:700, fontSize:12 }}>
+                                                📱 SMS
+                                              </a>
+                                              <button onClick={() => handleCopy(sc2)}
+                                                style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                                                  padding:"7px", borderRadius:8, border:"none", cursor:"pointer",
+                                                  background:"rgba(29,78,216,0.08)",
+                                                  color:"#1e3a8a", fontWeight:700, fontSize:12 }}>
+                                                📋 Copy
+                                              </button>
+                                            </div>
+                                          );
+                                        })()}
+                                        {b.date >= getTodayStr()
+                                          ? <button
+                                              disabled={cancelling === b.id}
+                                              onClick={() => handleCancelBooking(b.id)}
+                                              style={{ marginTop:4, width:"100%", padding:"7px", border:"none", borderRadius:8,
+                                                background:"linear-gradient(135deg,#dc2626,#ef4444)",
+                                                color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
+                                                opacity: cancelling===b.id ? 0.6 : 1 }}>
+                                              {cancelling===b.id ? "⏳ Cancelling..." : "🗑️ Cancel Booking"}
+                                            </button>
+                                          : <div style={{ marginTop:6, fontSize:11, color:"#94a3b8", fontStyle:"italic", textAlign:"center" }}>
+                                              ✅ Prayer already passed
+                                            </div>
+                                        }
                                       </div>
                                     )}
                                   </div>
                                 </div>
                               );
                             }
-                            // Satsang
+                            // Satsang / Bhadra / Matri / Savan — dynamic colours per type
+                            const TC = {
+                              satsang:{ border:"rgba(217,119,6,0.2)",  bg:"rgba(255,251,235,0.75)", bar:"linear-gradient(90deg,#d97706,#fbbf2455)", name:"#78350f", time:"#d97706", badge:"#92400e", badgeBg:"rgba(217,119,6,0.1)",  adminBg:"rgba(217,119,6,0.07)",  adminBorder:"rgba(217,119,6,0.18)",  adminText:"#92400e", label:"🪔 Satsang",  cancelGrad:"linear-gradient(135deg,#92400e,#d97706)", cancelLabel:"Cancel Satsang" },
+                              bhadra: { border:"rgba(109,40,217,0.2)", bg:"rgba(245,243,255,0.75)", bar:"linear-gradient(90deg,#7c3aed,#a78bfa55)", name:"#4c1d95", time:"#7c3aed", badge:"#6d28d9", badgeBg:"rgba(109,40,217,0.1)", adminBg:"rgba(109,40,217,0.07)", adminBorder:"rgba(109,40,217,0.18)", adminText:"#6d28d9", label:"🌸 Bhadra",  cancelGrad:"linear-gradient(135deg,#5b21b6,#7c3aed)", cancelLabel:"Cancel Bhadra" },
+                              matri:  { border:"rgba(190,24,93,0.2)",  bg:"rgba(253,242,248,0.75)", bar:"linear-gradient(90deg,#db2777,#f472b655)", name:"#831843", time:"#db2777", badge:"#be185d", badgeBg:"rgba(190,24,93,0.1)",  adminBg:"rgba(190,24,93,0.07)",  adminBorder:"rgba(190,24,93,0.18)",  adminText:"#be185d", label:"🌺 Matri",   cancelGrad:"linear-gradient(135deg,#9d174d,#db2777)", cancelLabel:"Cancel Matri" },
+                              savan:  { border:"rgba(21,128,61,0.2)",  bg:"rgba(240,253,244,0.75)", bar:"linear-gradient(90deg,#16a34a,#4ade8055)", name:"#14532d", time:"#16a34a", badge:"#15803d", badgeBg:"rgba(21,128,61,0.1)",  adminBg:"rgba(21,128,61,0.07)",  adminBorder:"rgba(21,128,61,0.18)",  adminText:"#15803d", label:"🌿 Savan",   cancelGrad:"linear-gradient(135deg,#14532d,#16a34a)", cancelLabel:"Cancel Savan" },
+                            };
+                            const tc = TC[b._type] || TC.satsang;
                             return (
                               <div key={b.id} style={{ borderRadius:14, overflow:"hidden",
-                                border:"1px solid rgba(217,119,6,0.2)",
-                                background:"rgba(255,251,235,0.75)" }}>
-                                <div style={{ height:3,
-                                  background:"linear-gradient(90deg,#d97706,#fbbf2455)" }}/>
+                                border:`1px solid ${tc.border}`, background:tc.bg }}>
+                                <div style={{ height:3, background:tc.bar }}/>
                                 <div style={{ padding:"12px 14px" }}>
                                   <div style={{ display:"flex", justifyContent:"space-between",
                                     alignItems:"flex-start", gap:8, marginBottom:4 }}>
                                     <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800,
-                                      color:"#78350f", fontSize:14 }}>{b.name}</div>
+                                      color:tc.name, fontSize:14 }}>{b.name}</div>
                                     <span style={{ flexShrink:0, fontSize:10, fontWeight:800,
-                                      color:"#92400e", background:"rgba(217,119,6,0.1)",
+                                      color:tc.badge, background:tc.badgeBg,
                                       padding:"2px 8px", borderRadius:20,
                                       textTransform:"uppercase", letterSpacing:"0.6px" }}>
-                                      🪔 Satsang
+                                      {tc.label}
                                     </span>
                                   </div>
-                                  <div style={{ fontSize:13, color:"#d97706",
+                                  <div style={{ fontSize:13, color:tc.time,
                                     fontWeight:700, marginBottom:3 }}>
-                                    ⏰ {cleanTime(b.time)} onwards
+                                    📅 {formatDateWithDay(b.date)} · ⏰ {cleanTime(b.time)}
                                   </div>
                                   {b.venue && (
                                     <div style={{ fontSize:12, color:"#6b7280" }}>
                                       {b.mapsLink
                                         ? <a href={b.mapsLink} target="_blank" rel="noopener noreferrer"
-                                            style={{ color:"#d97706", fontWeight:600, textDecoration:"none" }}>
+                                            style={{ color:tc.time, fontWeight:600, textDecoration:"none" }}>
                                             📍 {b.venue} · Map</a>
                                         : <>📍 {b.venue}</>}
                                     </div>
                                   )}
                                   {b.hostedBy && (
-                                    <div style={{ fontSize:12, color:"#92400e",
+                                    <div style={{ fontSize:12, color:tc.badge,
                                       fontWeight:600, marginTop:3 }}>
                                       🙏 {b.hostedBy}
                                     </div>
                                   )}
-                                  {b.occasion && (
-                                    <div style={{ fontSize:12, color:"#d97706",
-                                      fontWeight:600, marginTop:3 }}>
-                                      🪔 {b.occasion}
-                                    </div>
-                                  )}
                                   {currentUser && (
                                     <div style={{ marginTop:8, padding:"8px 10px", borderRadius:10,
-                                      background:"rgba(217,119,6,0.07)", border:"1px solid rgba(217,119,6,0.18)" }}>
-                                      <div style={{ fontSize:11, color:"#92400e", fontWeight:700, marginBottom:4,
+                                      background:tc.adminBg, border:`1px solid ${tc.adminBorder}` }}>
+                                      <div style={{ fontSize:11, color:tc.adminText, fontWeight:700, marginBottom:4,
                                         textTransform:"uppercase", letterSpacing:"0.8px" }}>🔐 Admin Info</div>
                                       <div style={{ fontSize:12, color:"#374151", fontWeight:600 }}>📱 {b.mobile}</div>
                                       <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🪪 {b.id}</div>
                                       {b.bookedAt && <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>🕒 {b.bookedAt}</div>}
-                                      <button
-                                        disabled={cancelling === b.id}
-                                        onClick={() => handleCancelSatsang(b.id)}
-                                        style={{ marginTop:8, width:"100%", padding:"7px", border:"none", borderRadius:8,
-                                          background:"linear-gradient(135deg,#92400e,#d97706)",
-                                          color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
-                                          opacity: cancelling===b.id ? 0.6 : 1 }}>
-                                        {cancelling===b.id ? "⏳ Cancelling..." : "🗑️ Cancel Satsang"}
-                                      </button>
+                                      {/* Share invitation */}
+                                      <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:5 }}>
+                                        <div style={{ fontSize:10, fontWeight:700, color:tc.adminText, textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:2 }}>📤 Share Invitation</div>
+                                        <a href={`https://wa.me/?text=${buildSatsangShareMsg(b)}`} target="_blank" rel="noopener noreferrer"
+                                          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                                            padding:"7px", borderRadius:8, textDecoration:"none",
+                                            background:"linear-gradient(135deg,#25D366,#128C7E)",
+                                            color:"#fff", fontWeight:700, fontSize:12 }}>
+                                          💬 WhatsApp
+                                        </a>
+                                        <a href={`sms:?body=${buildSatsangShareMsg(b)}`}
+                                          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                                            padding:"7px", borderRadius:8, textDecoration:"none",
+                                            background:tc.cancelGrad,
+                                            color:"#fff", fontWeight:700, fontSize:12 }}>
+                                          📱 SMS
+                                        </a>
+                                        <button onClick={() => handleSatsangCopy(b)}
+                                          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                                            padding:"7px", borderRadius:8, border:"none", cursor:"pointer",
+                                            background:tc.adminBg,
+                                            color:tc.adminText, fontWeight:700, fontSize:12 }}>
+                                          📋 Copy
+                                        </button>
+                                      </div>
+                                      {b.date >= getTodayStr()
+                                        ? <button
+                                            disabled={cancelling === b.id}
+                                            onClick={() => handleCancelSpecial(b.id, b._type)}
+                                            style={{ marginTop:4, width:"100%", padding:"7px", border:"none", borderRadius:8,
+                                              background:tc.cancelGrad, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
+                                              opacity: cancelling===b.id ? 0.6 : 1 }}>
+                                            {cancelling===b.id ? "⏳ Cancelling..." : `🗑️ ${tc.cancelLabel}`}
+                                          </button>
+                                        : <div style={{ marginTop:6, fontSize:11, color:"#94a3b8", fontStyle:"italic", textAlign:"center" }}>
+                                            ✅ Event already passed
+                                          </div>
+                                      }
                                     </div>
                                   )}
                                 </div>

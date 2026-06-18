@@ -7,6 +7,9 @@
 const SHEET = {
   BOOKINGS: 'Bookings',
   SATSANG:  'Satsang',
+  BHADRA:   'Bhadra',
+  MATRI:    'Matri',
+  SAVAN:    'Savan',
   PHOTOS:   'Photos',
 }
 
@@ -41,6 +44,24 @@ export const googleSheetsProvider = {
     getAll: ()     => apiCall('GET',    '/satsang/satsang'),
     add:    (data) => apiCall('POST',   '/satsang/satsang', { ...data, suk_key: _apiKey }),
     cancel: (id)   => apiCall('DELETE', `/satsang/satsang/${id}`),
+  },
+
+  bhadra: {
+    getAll: ()     => apiCall('GET',    '/bhadra/bhadra'),
+    add:    (data) => apiCall('POST',   '/bhadra/bhadra', { ...data, suk_key: _apiKey }),
+    cancel: (id)   => apiCall('DELETE', `/bhadra/bhadra/${id}`),
+  },
+
+  matri: {
+    getAll: ()     => apiCall('GET',    '/matri/matri'),
+    add:    (data) => apiCall('POST',   '/matri/matri', { ...data, suk_key: _apiKey }),
+    cancel: (id)   => apiCall('DELETE', `/matri/matri/${id}`),
+  },
+
+  savan: {
+    getAll: ()     => apiCall('GET',    '/savan/savan'),
+    add:    (data) => apiCall('POST',   '/savan/savan', { ...data, suk_key: _apiKey }),
+    cancel: (id)   => apiCall('DELETE', `/savan/savan/${id}`),
   },
 
   photos: {
