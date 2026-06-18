@@ -58,7 +58,7 @@ function LocationPicker({ onPick, color = "#1d4ed8", placeholder = "Search for a
     setSearching(true);
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&q=${encodeURIComponent(q.trim())}`,
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&countrycodes=in&q=${encodeURIComponent(q.trim())}`,
         { headers: { "Accept-Language": "en" } }
       );
       const data = await res.json();
