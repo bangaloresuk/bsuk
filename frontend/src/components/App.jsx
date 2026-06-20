@@ -1576,7 +1576,7 @@ function App({ onChangeSuk, deepLink = {}, currentUser = null, onSignOut, onRequ
               </div>
 
               <div>
-                <label className="divine-label">📍 Location</label>
+                <label className="divine-label">📍Address</label>
                 <input className="divine-input"
                   placeholder="Type location name  OR  paste Google Maps link"
                   value={form.place}
