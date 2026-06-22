@@ -161,12 +161,12 @@ function TierCard({ id, label, list, open, onToggle, onSelect }) {
 
       {open && (
         <div style={{
-          position:'absolute', top:'calc(100% + 6px)', left:0, right:0,
+          position:'absolute', top:'calc(100% + 6px)', left:0,
+          minWidth:200, width:'max-content', maxWidth:'90vw',
           background:'#ffffff',
           border:'1.5px solid rgba(59,130,246,0.25)',
           borderRadius:12, padding:'10px 12px',
           display:'flex', flexDirection:'column', gap:8,
-          // stack on top of everything below
           zIndex:200,
           boxShadow:'0 8px 24px rgba(29,78,216,0.12)',
           maxHeight:320, overflowY:'auto',
@@ -446,9 +446,7 @@ export default function DevoteeTracker({ bookings = [] }) {
   )
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:16,
-      // contain all children; prevents avatar overflow into sibling sections
-      contain:'layout'}}>
+    <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
       {/* ── KPI cards ── */}
       <div style={{display:'flex',flexWrap:'wrap',gap:10}}>
@@ -470,8 +468,7 @@ export default function DevoteeTracker({ bookings = [] }) {
       </div>
 
       {/* ── Tier cards — each is position:relative so dropdown stacks correctly ── */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,
-        // allow absolute dropdowns to overflow the grid
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10,
         overflow:'visible'}}>
         {[['core','Core (5+)',core],
           ['regular','Regular (2–4)',regular],
@@ -490,7 +487,8 @@ export default function DevoteeTracker({ bookings = [] }) {
 
       {/* ── Sub-nav ── */}
       <div style={{display:'flex',gap:5,background:'rgba(255,255,255,0.6)',
-        borderRadius:12,padding:4,border:'1px solid rgba(59,130,246,0.12)'}}>
+        borderRadius:12,padding:4,border:'1px solid rgba(59,130,246,0.12)',
+        overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
         {[['overview','📊 Overview'],['charts','📈 Charts'],
           ['heatmap','🗓️ Heatmap'],['table','🪷 All Devotees']
         ].map(([id,lbl])=>(

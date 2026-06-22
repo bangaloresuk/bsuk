@@ -35,6 +35,11 @@ export default function AllBookingsTab({
     if (allBookingsFilter && allBookingsFilter !== 'all') setTypeTab(allBookingsFilter)
   }, [allBookingsFilter])
 
+  React.useEffect(() => {
+    setShowPast(filtered.length === 0 && pastFiltered.length > 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeTab, activeYM])
+
   const allItems = [
     ...bookings.map(b        => ({ ...b, _type:'prayer'  })),
     ...satsangBookings.map(b => ({ ...b, _type:'satsang' })),
@@ -82,6 +87,7 @@ export default function AllBookingsTab({
   }).sort((a, b) => (b.date||'').localeCompare(a.date||''))
 
   const monthItems = allItems.filter(b => (b.date||'').startsWith(activeYM))
+  const upcomingMonthItems = monthItems.filter(b => (b.date||'') >= todayStr)
   const counts = {
     all:     monthItems.length,
     prayer:  monthItems.filter(b => b._type==='prayer').length,
