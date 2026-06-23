@@ -151,15 +151,14 @@ function PrayerForm({ form, setForm, error, shake, submitting, isSlotTaken, getS
     const sel      = form.date === dateStr
     chips.push(
       <button key={dateStr} type="button"
-        onClick={() => { if (!bothTaken) { setForm(f => ({ ...f, date:dateStr, time:'' })) } }}
-        disabled={bothTaken}
+        onClick={() => { setForm(f => ({ ...f, date:dateStr, time:'' })) }}
         style={{
           display:'flex', flexDirection:'column', alignItems:'center',
           padding:'8px 6px', borderRadius:12, flexShrink:0,
           border:`2px solid ${sel?'#1d4ed8':bothTaken?'#fca5a5':mTaken||eTaken?'#fcd34d':'rgba(59,130,246,0.18)'}`,
           background:sel?'#1d4ed8':bothTaken?'#fee2e2':mTaken||eTaken?'#fef3c7':'#f0f9ff',
-          cursor:bothTaken?'not-allowed':'pointer', minWidth:48,
-          opacity:bothTaken?0.6:1, transition:'all 0.15s',
+          cursor:'pointer', minWidth:48,
+          opacity:bothTaken?0.85:1, transition:'all 0.15s',
           boxShadow:sel?'0 3px 12px rgba(29,78,216,0.35)':'none',
         }}>
         <div style={{ fontSize:9, fontWeight:700, textTransform:'uppercase',
