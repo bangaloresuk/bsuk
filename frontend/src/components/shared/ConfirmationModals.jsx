@@ -79,28 +79,28 @@ export function PrayerConfirmModal({ confirmation, onClose, buildShareMsg, build
 
         <div style={{ marginTop:18, padding:'14px', background:'#f0fdf4', borderRadius:12, border:'1px solid #bbf7d0' }}>
           <div style={{ fontSize:12, fontWeight:700, color:'#065f46', marginBottom:10, textAlign:'center' }}>📤 Share Booking Details</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ display:'flex', flexDirection:'row', gap:8 }}>
             <a href={`https://wa.me/?text=${buildShareMsg(c)}`} target="_blank" rel="noopener noreferrer"
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'12px',
+              style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                flexDirection:'column', gap:4, padding:'10px 6px',
                 borderRadius:11, textDecoration:'none', background:'linear-gradient(135deg,#25D366,#128C7E)',
-                color:'#fff', fontWeight:800, fontSize:14, boxShadow:'0 4px 14px rgba(37,211,102,0.35)' }}>
-              <span style={{ fontSize:20 }}>💬</span>Share on WhatsApp
+                color:'#fff', fontWeight:800, fontSize:12, boxShadow:'0 4px 14px rgba(37,211,102,0.35)' }}>
+              <span style={{ fontSize:20 }}>💬</span>WhatsApp
             </a>
             <a href={`sms:${c.mobile}?body=${buildShareMsg(c)}`}
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'12px',
+              style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                flexDirection:'column', gap:4, padding:'10px 6px',
                 borderRadius:11, textDecoration:'none', background:'linear-gradient(135deg,#1d4ed8,#3b82f6)',
-                color:'#fff', fontWeight:800, fontSize:14, boxShadow:'0 4px 14px rgba(29,78,216,0.3)' }}>
-              <span style={{ fontSize:20 }}>📱</span>Send as SMS
+                color:'#fff', fontWeight:800, fontSize:12, boxShadow:'0 4px 14px rgba(29,78,216,0.3)' }}>
+              <span style={{ fontSize:20 }}>📱</span>SMS
             </a>
             <button onClick={() => handleCopy(c)}
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'12px',
+              style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                flexDirection:'column', gap:4, padding:'10px 6px',
                 borderRadius:11, border:'none', background:'rgba(30,64,175,0.08)',
-                cursor:'pointer', color:'#1e3a8a', fontWeight:700, fontSize:14 }}>
-              <span style={{ fontSize:20 }}>📋</span>Copy to Clipboard
+                cursor:'pointer', color:'#1e3a8a', fontWeight:700, fontSize:12 }}>
+              <span style={{ fontSize:20 }}>📋</span>Copy
             </button>
-          </div>
-          <div style={{ fontSize:11, color:'#6b7280', marginTop:8, textAlign:'center', lineHeight:1.5 }}>
-            Tap WhatsApp to share · SMS to send directly · Copy to paste anywhere
           </div>
         </div>
         <button className="modal-close-btn" style={{ marginTop:14 }} onClick={onClose}>✓ Done</button>
@@ -158,28 +158,28 @@ export function SatsangConfirmModal({ satsangConfirm, onClose, buildSatsangShare
           borderRadius:12, border:`1px solid ${st.shareBorder}` }}>
           <div style={{ fontSize:12, fontWeight:700, color:st.shareTitle,
             marginBottom:10, textAlign:'center' }}>📤 Share Details</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ display:'flex', flexDirection:'row', gap:8 }}>
             <a href={`https://wa.me/?text=${buildSatsangShareMsg(c)}`} target="_blank" rel="noopener noreferrer"
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'12px',
+              style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                flexDirection:'column', gap:4, padding:'10px 6px',
                 borderRadius:11, textDecoration:'none', background:'linear-gradient(135deg,#25D366,#128C7E)',
-                color:'#fff', fontWeight:800, fontSize:14, boxShadow:'0 4px 14px rgba(37,211,102,0.35)' }}>
-              <span style={{ fontSize:20 }}>💬</span>Share on WhatsApp
+                color:'#fff', fontWeight:800, fontSize:12, boxShadow:'0 4px 14px rgba(37,211,102,0.35)' }}>
+              <span style={{ fontSize:20 }}>💬</span>WhatsApp
             </a>
             <a href={`sms:?body=${buildSatsangShareMsg(c)}`}
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'12px',
+              style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                flexDirection:'column', gap:4, padding:'10px 6px',
                 borderRadius:11, textDecoration:'none', background:st.smsBg,
-                color:'#fff', fontWeight:800, fontSize:14, boxShadow:`0 4px 14px ${st.smsShadow}` }}>
-              <span style={{ fontSize:20 }}>📱</span>Send as SMS
+                color:'#fff', fontWeight:800, fontSize:12, boxShadow:`0 4px 14px ${st.smsShadow}` }}>
+              <span style={{ fontSize:20 }}>📱</span>SMS
             </a>
             <button onClick={() => handleSatsangCopy(c)}
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'12px',
+              style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                flexDirection:'column', gap:4, padding:'10px 6px',
                 borderRadius:11, border:'none', background:st.copyBg,
-                cursor:'pointer', color:st.copyColor, fontWeight:700, fontSize:14 }}>
-              <span style={{ fontSize:20 }}>📋</span>Copy to Clipboard
+                cursor:'pointer', color:st.copyColor, fontWeight:700, fontSize:12 }}>
+              <span style={{ fontSize:20 }}>📋</span>Copy
             </button>
-          </div>
-          <div style={{ fontSize:11, color:'#6b7280', marginTop:8, textAlign:'center', lineHeight:1.5 }}>
-            Share the invitation with family & friends 🙏
           </div>
         </div>
 

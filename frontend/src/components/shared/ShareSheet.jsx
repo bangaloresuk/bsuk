@@ -18,38 +18,38 @@ export function ShareSheet({ message, mobile = '', accentColor = '#25D366', onCl
   }
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+    <div style={{ display:'flex', flexDirection:'row', gap:8 }}>
       {/* WhatsApp */}
       <a href={`https://wa.me/?text=${encoded}`}
         target="_blank" rel="noopener noreferrer"
-        style={{ display:'flex', alignItems:'center', justifyContent:'center',
-          gap:10, padding:'12px', borderRadius:11, textDecoration:'none',
+        style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+          flexDirection:'column', gap:4, padding:'10px 6px', borderRadius:11, textDecoration:'none',
           background:'linear-gradient(135deg,#25D366,#128C7E)',
-          color:'#fff', fontWeight:800, fontSize:14,
+          color:'#fff', fontWeight:800, fontSize:12,
           boxShadow:'0 4px 14px rgba(37,211,102,0.35)' }}>
         <span style={{ fontSize:20 }}>💬</span>
-        Share on WhatsApp
+        WhatsApp
       </a>
 
       {/* SMS */}
       <a href={mobile ? `sms:${mobile}?body=${encoded}` : `sms:?body=${encoded}`}
-        style={{ display:'flex', alignItems:'center', justifyContent:'center',
-          gap:10, padding:'12px', borderRadius:11, textDecoration:'none',
+        style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+          flexDirection:'column', gap:4, padding:'10px 6px', borderRadius:11, textDecoration:'none',
           background:`linear-gradient(135deg,${accentColor},${accentColor}cc)`,
-          color:'#fff', fontWeight:800, fontSize:14,
+          color:'#fff', fontWeight:800, fontSize:12,
           boxShadow:`0 4px 14px ${accentColor}55` }}>
         <span style={{ fontSize:20 }}>📱</span>
-        Send as SMS
+        SMS
       </a>
 
       {/* Copy */}
       <button onClick={handleCopy}
-        style={{ display:'flex', alignItems:'center', justifyContent:'center',
-          gap:10, padding:'12px', borderRadius:11, border:'none',
+        style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+          flexDirection:'column', gap:4, padding:'10px 6px', borderRadius:11, border:'none',
           background:'rgba(30,64,175,0.08)', cursor:'pointer',
-          color:'#1e3a8a', fontWeight:700, fontSize:14 }}>
+          color:'#1e3a8a', fontWeight:700, fontSize:12 }}>
         <span style={{ fontSize:20 }}>📋</span>
-        Copy to Clipboard
+        Copy
       </button>
     </div>
   )
