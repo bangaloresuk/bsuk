@@ -84,7 +84,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
   100% { transform:translateY(-8vh) scale(1.2); opacity:0; }
 }
 
-/* ══ SPLASH ══ */
+/* â•â• SPLASH â•â• */
 #splash {
   position:fixed; inset:0; z-index:9999;
   background:
@@ -210,7 +210,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
 }
 
 
-/* ── Skeleton / shimmer loader ── */
+/* â”€â”€ Skeleton / shimmer loader â”€â”€ */
 .skeleton {
   background: linear-gradient(90deg,
     rgba(219,234,254,0.6) 25%,
@@ -251,7 +251,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
   100% { width:100%; }
 }
 
-/* ══ MODAL ══ */
+/* â•â• MODAL â•â• */
 .modal-overlay {
   position:fixed; inset:0; z-index:1000;
   background:rgba(8,25,90,0.55);
@@ -292,7 +292,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
 }
 .modal-close-btn:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(29,78,216,0.45); }
 
-/* ══ CONTENT ══ */
+/* â•â• CONTENT â•â• */
 .content {
   position:relative; z-index:1;
   max-width:640px; margin:0 auto;
@@ -326,7 +326,7 @@ input[type="date"] {
   margin:6px 0;
 }
 
-/* ══ CARD — divine glass with golden breath ══ */
+/* â•â• CARD â€” divine glass with golden breath â•â• */
 .card {
   background: rgba(255,255,255,0.92);
   border: 1px solid rgba(59,130,246,0.18);
@@ -406,7 +406,7 @@ input[type="date"] {
   text-transform:uppercase; letter-spacing:1.5px;
 }
 .divine-label::before {
-  content:'✦ ';
+  content:'âœ¦ ';
   color:rgba(200,160,30,0.55);
   font-size:9px;
 }
@@ -490,13 +490,16 @@ input[type="date"] {
 ::-webkit-scrollbar-track { background:#eff6ff; }
 ::-webkit-scrollbar-thumb { background:rgba(59,130,246,0.35); border-radius:3px; }
 
+/* Hide scrollbar on analytics nav pill row */
+.analytics-nav::-webkit-scrollbar { display:none; }
+
 
 @keyframes floatEmoji {
 from { transform: translateY(0) scale(1); }
 to   { transform: translateY(-10px) scale(1.05); }
 }
 
-/* ── Hamburger drawer transition ── */
+/* â”€â”€ Hamburger drawer transition â”€â”€ */
 .drawer-enter {
   transform: translateX(100%);
 }
@@ -509,7 +512,7 @@ to   { transform: translateY(-10px) scale(1.05); }
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── Shake animation for sign-in errors ── */
+/* â”€â”€ Shake animation for sign-in errors â”€â”€ */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20%  { transform: translateX(-7px); }

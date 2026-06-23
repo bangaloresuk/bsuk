@@ -321,7 +321,7 @@ export default function DashboardTab({ bookings=[], satsangBookings=[] }) {
     { id:'devotees', label:'🧘 Devotees' },
   ]
   const navSt = id => ({
-    flex:1, padding:'9px 4px', border:'none', borderRadius:12, cursor:'pointer',
+    flex:'0 0 auto', padding:'9px 10px', border:'none', borderRadius:12, cursor:'pointer',
     fontFamily:"'Cinzel',serif", fontSize:11, fontWeight:800, transition:'all .18s',
     whiteSpace:'nowrap',
     background: page===id ? 'linear-gradient(135deg,#1e3a8a,#3b82f6)' : 'rgba(239,246,255,0.7)',
@@ -495,7 +495,9 @@ export default function DashboardTab({ bookings=[], satsangBookings=[] }) {
 
       {/* Nav */}
       <div style={{display:'flex',gap:6,background:'rgba(255,255,255,0.6)',
-        borderRadius:14,padding:5,border:'1px solid rgba(59,130,246,0.15)'}}>
+        borderRadius:14,padding:5,border:'1px solid rgba(59,130,246,0.15)',
+        overflowX:'auto',WebkitOverflowScrolling:'touch',
+        scrollbarWidth:'none',msOverflowStyle:'none'}}>
         {NAV.map(n=><button key={n.id} style={navSt(n.id)} onClick={()=>setPage(n.id)}>{n.label}</button>)}
       </div>
 
