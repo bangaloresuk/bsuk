@@ -84,7 +84,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
   100% { transform:translateY(-8vh) scale(1.2); opacity:0; }
 }
 
-/* â•â• SPLASH â•â• */
+/* Ã¢â€¢ÂÃ¢â€¢Â SPLASH Ã¢â€¢ÂÃ¢â€¢Â */
 #splash {
   position:fixed; inset:0; z-index:9999;
   background:
@@ -210,7 +210,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
 }
 
 
-/* â”€â”€ Skeleton / shimmer loader â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Skeleton / shimmer loader Ã¢â€â‚¬Ã¢â€â‚¬ */
 .skeleton {
   background: linear-gradient(90deg,
     rgba(219,234,254,0.6) 25%,
@@ -251,7 +251,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
   100% { width:100%; }
 }
 
-/* â•â• MODAL â•â• */
+/* Ã¢â€¢ÂÃ¢â€¢Â MODAL Ã¢â€¢ÂÃ¢â€¢Â */
 .modal-overlay {
   position:fixed; inset:0; z-index:1000;
   background:rgba(8,25,90,0.55);
@@ -292,7 +292,7 @@ to   { opacity:1; transform:translateY(0) scale(1); }
 }
 .modal-close-btn:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(29,78,216,0.45); }
 
-/* â•â• CONTENT â•â• */
+/* Ã¢â€¢ÂÃ¢â€¢Â CONTENT Ã¢â€¢ÂÃ¢â€¢Â */
 .content {
   position:relative; z-index:1;
   max-width:640px; margin:0 auto;
@@ -326,7 +326,7 @@ input[type="date"] {
   margin:6px 0;
 }
 
-/* â•â• CARD â€” divine glass with golden breath â•â• */
+/* Ã¢â€¢ÂÃ¢â€¢Â CARD Ã¢â‚¬â€ divine glass with golden breath Ã¢â€¢ÂÃ¢â€¢Â */
 .card {
   background: rgba(255,255,255,0.92);
   border: 1px solid rgba(59,130,246,0.18);
@@ -373,7 +373,7 @@ input[type="date"] {
 }
 
 .tab-btn {
-  flex:0 0 auto; border:none; cursor:pointer;
+  flex:1; min-width:max-content; border:none; cursor:pointer;
   padding:10px 12px; border-radius:10px;
   font-size:13px; font-weight:600;
   transition:all 0.2s; letter-spacing:0.3px; white-space:nowrap;
@@ -406,7 +406,7 @@ input[type="date"] {
   text-transform:uppercase; letter-spacing:1.5px;
 }
 .divine-label::before {
-  content:'âœ¦ ';
+  content:'Ã¢Å“Â¦ ';
   color:rgba(200,160,30,0.55);
   font-size:9px;
 }
@@ -496,7 +496,7 @@ from { transform: translateY(0) scale(1); }
 to   { transform: translateY(-10px) scale(1.05); }
 }
 
-/* â”€â”€ Hamburger drawer transition â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Hamburger drawer transition Ã¢â€â‚¬Ã¢â€â‚¬ */
 .drawer-enter {
   transform: translateX(100%);
 }
@@ -509,7 +509,7 @@ to   { transform: translateY(-10px) scale(1.05); }
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* â”€â”€ Shake animation for sign-in errors â”€â”€ */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Shake animation for sign-in errors Ã¢â€â‚¬Ã¢â€â‚¬ */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20%  { transform: translateX(-7px); }

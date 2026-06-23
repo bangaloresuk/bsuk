@@ -422,7 +422,7 @@ export default function DevoteeTracker({ bookings = [] }) {
   })
 
   const navSt = id => ({
-    flex:1, padding:'8px 4px', border:'none', borderRadius:10, cursor:'pointer',
+    flex:'0 0 auto', padding:'8px 12px', border:'none', borderRadius:10, cursor:'pointer',
     fontFamily:"'Cinzel',serif", fontSize:10, fontWeight:800,
     whiteSpace:'nowrap', transition:'all .15s',
     background: page===id ? 'linear-gradient(135deg,#1e3a8a,#3b82f6)' : 'rgba(239,246,255,0.7)',

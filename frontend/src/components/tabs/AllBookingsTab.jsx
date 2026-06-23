@@ -34,12 +34,10 @@ export default function AllBookingsTab({
   React.useEffect(() => {
     if (allBookingsFilter && allBookingsFilter !== 'all') {
       setTypeTab(allBookingsFilter)
-      const typeItems = allItems.filter(b => b._type === allBookingsFilter)
-      if (typeItems.length > 0) {
-        const months = typeItems.map(b => (b.date||'').slice(0,7)).filter(Boolean).sort()
-        const mostRecent = months[months.length - 1]
-        if (mostRecent) setActiveYM(mostRecent)
-      }
+      // Show all time data by activating a full date range
+      setShowRange(true)
+      setDateFrom('2020-01-01')
+      setDateTo('2099-12-31')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allBookingsFilter])
