@@ -104,13 +104,24 @@ export default function AllBookingsTab({
 
   const monthItems = allItems.filter(b => (b.date||'').startsWith(activeYM))
   const upcomingMonthItems = monthItems.filter(b => (b.date||'') >= todayStr)
+  // When a date range is active, show counts for that range so they match
+  // the header chips and the actual list being displayed.
+  // In normal month view, show counts for the active calendar month.
+  const countBase = isRangeActive
+    ? allItems.filter(b => {
+        const d = b.date || ''
+        if (dateFrom && d < dateFrom) return false
+        if (dateTo   && d > dateTo)   return false
+        return true
+      })
+    : monthItems
   const counts = {
-    all:     monthItems.length,
-    prayer:  monthItems.filter(b => b._type==='prayer').length,
-    satsang: monthItems.filter(b => b._type==='satsang').length,
-    bhadra:  monthItems.filter(b => b._type==='bhadra').length,
-    matri:   monthItems.filter(b => b._type==='matri').length,
-    savan:   monthItems.filter(b => b._type==='savan').length,
+    all:     countBase.length,
+    prayer:  countBase.filter(b => b._type==='prayer').length,
+    satsang: countBase.filter(b => b._type==='satsang').length,
+    bhadra:  countBase.filter(b => b._type==='bhadra').length,
+    matri:   countBase.filter(b => b._type==='matri').length,
+    savan:   countBase.filter(b => b._type==='savan').length,
   }
 
   const TYPE_TABS = [
