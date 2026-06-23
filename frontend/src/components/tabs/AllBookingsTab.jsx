@@ -357,40 +357,33 @@ function PrayerCard({ b, currentUser, cancelling, todayStr, handleCancelBooking,
             <div style={{ fontSize:12, color:'#374151', fontWeight:600 }}>📱 {b.mobile}</div>
             <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🪪 {b.id}</div>
             {b.bookedAt && <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🕒 {b.bookedAt}</div>}
-            <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:5 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'rgba(29,78,216,0.5)',
-                textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:2 }}>📤 Share Invitation</div>
+            <div style={{ marginTop:8, display:'flex', gap:6 }}>
               <a href={`https://wa.me/?text=${buildShareMsg(sc)}`} target="_blank" rel="noopener noreferrer"
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
+                style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                  padding:'8px 6px', borderRadius:10, textDecoration:'none',
                   background:'linear-gradient(135deg,#25D366,#128C7E)', color:'#fff', fontWeight:700, fontSize:12 }}>
                 💬 WhatsApp
               </a>
-              <a href={`sms:${b.mobile}?body=${buildShareMsg(sc)}`}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
-                  background:'linear-gradient(135deg,#1d4ed8,#3b82f6)', color:'#fff', fontWeight:700, fontSize:12 }}>
-                📱 SMS
-              </a>
               <button onClick={() => handleCopy(sc)}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, border:'none', cursor:'pointer',
-                  background:'rgba(29,78,216,0.08)', color:'#1e3a8a', fontWeight:700, fontSize:12 }}>
+                style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                  padding:'8px 6px', borderRadius:10, border:'1px solid rgba(29,78,216,0.15)', cursor:'pointer',
+                  background:'rgba(239,246,255,0.8)', color:'#1e3a8a', fontWeight:700, fontSize:12 }}>
                 📋 Copy
               </button>
+              {b.date >= todayStr
+                ? <button disabled={cancelling === b.id} onClick={() => handleCancelBooking(b.id)}
+                    style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                      padding:'8px 6px', borderRadius:10, border:'1px solid rgba(220,38,38,0.2)', cursor:'pointer',
+                      background:'rgba(254,242,242,0.9)', color:'#dc2626', fontWeight:700, fontSize:12,
+                      opacity: cancelling===b.id?0.6:1 }}>
+                    {cancelling===b.id ? '⏳...' : '🗑️ Cancel'}
+                  </button>
+                : <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:11, color:'#94a3b8', fontStyle:'italic', textAlign:'center' }}>
+                    ✅ Passed
+                  </div>
+              }
             </div>
-            {b.date >= todayStr
-              ? <button disabled={cancelling === b.id} onClick={() => handleCancelBooking(b.id)}
-                  style={{ marginTop:4, width:'100%', padding:'7px', border:'none', borderRadius:8,
-                    background:'linear-gradient(135deg,#dc2626,#ef4444)',
-                    color:'#fff', fontWeight:700, fontSize:12, cursor:'pointer',
-                    opacity: cancelling===b.id?0.6:1 }}>
-                  {cancelling===b.id ? '⏳ Cancelling...' : '🗑️ Cancel Booking'}
-                </button>
-              : <div style={{ marginTop:6, fontSize:11, color:'#94a3b8', fontStyle:'italic', textAlign:'center' }}>
-                  ✅ Prayer already passed
-                </div>
-            }
           </div>
         )}
       </div>
@@ -432,39 +425,33 @@ function SatsangCard({ b, currentUser, cancelling, todayStr, handleCancelSpecial
             <div style={{ fontSize:12, color:'#374151', fontWeight:600 }}>📱 {b.mobile}</div>
             <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🪪 {b.id}</div>
             {b.bookedAt && <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🕒 {b.bookedAt}</div>}
-            <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:5 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:tc.adminText,
-                textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:2 }}>📤 Share Invitation</div>
+            <div style={{ marginTop:8, display:'flex', gap:6 }}>
               <a href={`https://wa.me/?text=${buildSatsangShareMsg(b)}`} target="_blank" rel="noopener noreferrer"
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
+                style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                  padding:'8px 6px', borderRadius:10, textDecoration:'none',
                   background:'linear-gradient(135deg,#25D366,#128C7E)', color:'#fff', fontWeight:700, fontSize:12 }}>
                 💬 WhatsApp
               </a>
-              <a href={`sms:?body=${buildSatsangShareMsg(b)}`}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
-                  background:tc.cancelGrad, color:'#fff', fontWeight:700, fontSize:12 }}>
-                📱 SMS
-              </a>
               <button onClick={() => handleSatsangCopy(b)}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, border:'none', cursor:'pointer',
+                style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                  padding:'8px 6px', borderRadius:10, border:`1px solid ${tc.border}`, cursor:'pointer',
                   background:tc.adminBg, color:tc.adminText, fontWeight:700, fontSize:12 }}>
                 📋 Copy
               </button>
+              {b.date >= todayStr
+                ? <button disabled={cancelling === b.id} onClick={() => handleCancelSpecial(b.id, b._type)}
+                    style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                      padding:'8px 6px', borderRadius:10, border:'1px solid rgba(220,38,38,0.2)', cursor:'pointer',
+                      background:'rgba(254,242,242,0.9)', color:'#dc2626', fontWeight:700, fontSize:12,
+                      opacity: cancelling===b.id?0.6:1 }}>
+                    {cancelling===b.id ? '⏳...' : '🗑️ Cancel'}
+                  </button>
+                : <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:11, color:'#94a3b8', fontStyle:'italic', textAlign:'center' }}>
+                    ✅ Passed
+                  </div>
+              }
             </div>
-            {b.date >= todayStr
-              ? <button disabled={cancelling === b.id} onClick={() => handleCancelSpecial(b.id, b._type)}
-                  style={{ marginTop:4, width:'100%', padding:'7px', border:'none', borderRadius:8,
-                    background:tc.cancelGrad, color:'#fff', fontWeight:700, fontSize:12, cursor:'pointer',
-                    opacity: cancelling===b.id?0.6:1 }}>
-                  {cancelling===b.id ? '⏳ Cancelling...' : `🗑️ ${tc.cancelLabel}`}
-                </button>
-              : <div style={{ marginTop:6, fontSize:11, color:'#94a3b8', fontStyle:'italic', textAlign:'center' }}>
-                  ✅ Event already passed
-                </div>
-            }
           </div>
         )}
       </div>
