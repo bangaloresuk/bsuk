@@ -295,7 +295,7 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
       {/* Tab bar */}
       <div style={{ display:'flex', gap:6, marginBottom:24, background:'rgba(255,255,255,0.7)', borderRadius:14, padding:5, border:'1px solid rgba(59,130,246,0.15)', overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
         {tabs.map(t => (
-          <button key={t.id} className={`tab-btn ${activeTab === t.id ? 'active' : 'inactive'}`} onClick={() => setActiveTab(t.id)} style={{ flexShrink:0, flex:'0 0 auto' }}>{t.label}</button>
+          <button key={t.id} className={`tab-btn ${activeTab === t.id ? 'active' : 'inactive'}`} onClick={() => setActiveTab(t.id)}>{t.label}</button>
         ))}
       </div>
 
