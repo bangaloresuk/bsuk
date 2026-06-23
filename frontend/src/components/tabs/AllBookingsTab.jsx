@@ -368,27 +368,29 @@ function PrayerCard({ b, currentUser, cancelling, todayStr, handleCancelBooking,
             <div style={{ fontSize:12, color:'#374151', fontWeight:600 }}>📱 {b.mobile}</div>
             <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🪪 {b.id}</div>
             {b.bookedAt && <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🕒 {b.bookedAt}</div>}
-            <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:5 }}>
+            <div style={{ marginTop:8 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'rgba(29,78,216,0.5)',
-                textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:2 }}>📤 Share Invitation</div>
-              <a href={`https://wa.me/?text=${buildShareMsg(sc)}`} target="_blank" rel="noopener noreferrer"
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
-                  background:'linear-gradient(135deg,#25D366,#128C7E)', color:'#fff', fontWeight:700, fontSize:12 }}>
-                💬 WhatsApp
-              </a>
-              <a href={`sms:${b.mobile}?body=${buildShareMsg(sc)}`}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
-                  background:'linear-gradient(135deg,#1d4ed8,#3b82f6)', color:'#fff', fontWeight:700, fontSize:12 }}>
-                📱 SMS
-              </a>
-              <button onClick={() => handleCopy(sc)}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, border:'none', cursor:'pointer',
-                  background:'rgba(29,78,216,0.08)', color:'#1e3a8a', fontWeight:700, fontSize:12 }}>
-                📋 Copy
-              </button>
+                textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:6 }}>📤 Share Invitation</div>
+              <div style={{ display:'flex', flexDirection:'row', gap:5 }}>
+                <a href={`https://wa.me/?text=${buildShareMsg(sc)}`} target="_blank" rel="noopener noreferrer"
+                  style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                    padding:'7px 4px', borderRadius:8, textDecoration:'none',
+                    background:'linear-gradient(135deg,#25D366,#128C7E)', color:'#fff', fontWeight:700, fontSize:11 }}>
+                  💬 WhatsApp
+                </a>
+                <a href={`sms:${b.mobile}?body=${buildShareMsg(sc)}`}
+                  style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                    padding:'7px 4px', borderRadius:8, textDecoration:'none',
+                    background:'linear-gradient(135deg,#1d4ed8,#3b82f6)', color:'#fff', fontWeight:700, fontSize:11 }}>
+                  📱 SMS
+                </a>
+                <button onClick={() => handleCopy(sc)}
+                  style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                    padding:'7px 4px', borderRadius:8, border:'none', cursor:'pointer',
+                    background:'rgba(29,78,216,0.08)', color:'#1e3a8a', fontWeight:700, fontSize:11 }}>
+                  📋 Copy
+                </button>
+              </div>
             </div>
             {b.date >= todayStr
               ? <button disabled={cancelling === b.id} onClick={() => handleCancelBooking(b.id)}
@@ -443,27 +445,29 @@ function SatsangCard({ b, currentUser, cancelling, todayStr, handleCancelSpecial
             <div style={{ fontSize:12, color:'#374151', fontWeight:600 }}>📱 {b.mobile}</div>
             <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🪪 {b.id}</div>
             {b.bookedAt && <div style={{ fontSize:11, color:'#6b7280', marginTop:2 }}>🕒 {b.bookedAt}</div>}
-            <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:5 }}>
+            <div style={{ marginTop:8 }}>
               <div style={{ fontSize:10, fontWeight:700, color:tc.adminText,
-                textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:2 }}>📤 Share Invitation</div>
-              <a href={`https://wa.me/?text=${buildSatsangShareMsg(b)}`} target="_blank" rel="noopener noreferrer"
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
-                  background:'linear-gradient(135deg,#25D366,#128C7E)', color:'#fff', fontWeight:700, fontSize:12 }}>
-                💬 WhatsApp
-              </a>
-              <a href={`sms:?body=${buildSatsangShareMsg(b)}`}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, textDecoration:'none',
-                  background:tc.cancelGrad, color:'#fff', fontWeight:700, fontSize:12 }}>
-                📱 SMS
-              </a>
-              <button onClick={() => handleSatsangCopy(b)}
-                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                  padding:'7px', borderRadius:8, border:'none', cursor:'pointer',
-                  background:tc.adminBg, color:tc.adminText, fontWeight:700, fontSize:12 }}>
-                📋 Copy
-              </button>
+                textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:6 }}>📤 Share Invitation</div>
+              <div style={{ display:'flex', flexDirection:'row', gap:5 }}>
+                <a href={`https://wa.me/?text=${buildSatsangShareMsg(b)}`} target="_blank" rel="noopener noreferrer"
+                  style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                    padding:'7px 4px', borderRadius:8, textDecoration:'none',
+                    background:'linear-gradient(135deg,#25D366,#128C7E)', color:'#fff', fontWeight:700, fontSize:11 }}>
+                  💬 WhatsApp
+                </a>
+                <a href={`sms:?body=${buildSatsangShareMsg(b)}`}
+                  style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                    padding:'7px 4px', borderRadius:8, textDecoration:'none',
+                    background:tc.cancelGrad, color:'#fff', fontWeight:700, fontSize:11 }}>
+                  📱 SMS
+                </a>
+                <button onClick={() => handleSatsangCopy(b)}
+                  style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                    padding:'7px 4px', borderRadius:8, border:'none', cursor:'pointer',
+                    background:tc.adminBg, color:tc.adminText, fontWeight:700, fontSize:11 }}>
+                  📋 Copy
+                </button>
+              </div>
             </div>
             {b.date >= todayStr
               ? <button disabled={cancelling === b.id} onClick={() => handleCancelSpecial(b.id, b._type)}
