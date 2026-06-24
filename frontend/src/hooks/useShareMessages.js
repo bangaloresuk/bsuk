@@ -23,8 +23,16 @@ export function useShareMessages() {
 
   // ── Prayer booking share message ──────────────────────────
   const buildShareMsgPlain = (c) => {
-    const timeLabel    = c.time === 'Morning' ? 'Morning' : 'Evening'
-    const locationLine = c.place || sukLabelFull()
+    const timeLabel = c.time === 'Morning' ? 'Morning' : 'Evening'
+
+    // If user pasted a maps URL inside the address field, split it out automatically
+    const URL_RE = /(https?:\/\/\S+)/
+    const rawPlace = c.place || ''
+    const urlInPlace = rawPlace.match(URL_RE)
+    const cleanPlace = urlInPlace ? rawPlace.replace(URL_RE, '').replace(/,?\s*$/, '').trim() : rawPlace.trim()
+    const resolvedMaps = c.mapsLink || (urlInPlace ? urlInPlace[1] : '')
+    const locationLine = cleanPlace || sukLabelFull()
+
     return [
       'Jayguru 🙏',
       '',
@@ -41,7 +49,7 @@ export function useShareMessages() {
       `📍 *Address:*`,
       `${locationLine}`,
       '',
-      ...(c.mapsLink ? [`📌 *Google Maps:*`, `${c.mapsLink}`] : []),
+      ...(resolvedMaps ? [`📌 *Google Maps:*`, `${resolvedMaps}`] : []),
       '━━━━━━━━━━━━━━━━━━━━',
       '',
       '*With love & Jayguru,*',
