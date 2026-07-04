@@ -14,6 +14,21 @@ const AV_TEXT = ['#1e40af','#065f46','#92400e','#4c1d95','#991b1b','#064e3b','#7
 const ci  = n => { let h=0; for(const c of n) h=(h*31+c.charCodeAt(0))&0xffff; return h%8 }
 const ini = n => { const p=n.trim().split(/\s+/); return (p[0][0]+(p[1]?p[1][0]:'')).toUpperCase() }
 
+// normalize a name for identity comparisons: lowercase, collapse whitespace
+const normName = n => n.trim().toLowerCase().replace(/\s+/g, ' ')
+
+// classic edit distance — used to flag likely-typo duplicate names (e.g. "Sulaghna Ghosh" vs "Sulghna Ghosh")
+function levenshtein(a, b) {
+  const m = a.length, n = b.length
+  if (!m) return n; if (!n) return m
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+  return dp[m][n]
+}
+
 function localToday() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -29,15 +44,31 @@ function monthLabel(ym) {
 // ── Build devotees ────────────────────────────────────────────
 function buildDevotees(bookings) {
   const NOW = localToday()
-  const map = {}
+  const byMobile = {}
   bookings.forEach(b => {
     const mob  = (b.mobile || '').trim()
     const name = (b.name   || '').trim()
     const date = (b.date   || '').slice(0, 10)
     if (!mob || date.length < 10) return
-    if (!map[mob]) map[mob] = { name, mobile: mob, past: new Set(), future: new Set() }
-    map[mob].name = name
-    date <= NOW ? map[mob].past.add(date) : map[mob].future.add(date)
+    if (!byMobile[mob]) byMobile[mob] = { name, mobile: mob, past: new Set(), future: new Set() }
+    byMobile[mob].name = name
+    date <= NOW ? byMobile[mob].past.add(date) : byMobile[mob].future.add(date)
+  })
+
+  // Bug fix: the same devotee can end up with two different mobile numbers on file
+  // (typo'd digit, used a family member's phone, re-registered later, etc). Left
+  // as-is, that split a single person's history into two rows — one of which could
+  // sit on old dates and get wrongly flagged "at risk"/"inactive" even though the
+  // person, under their other number, booked recently. We merge records that share
+  // the exact same normalized name (safe/deterministic) before computing status, so
+  // status reflects the person's FULL booking history rather than half of it.
+  const map = {}
+  Object.values(byMobile).forEach(d => {
+    const key = normName(d.name)
+    if (!map[key]) map[key] = { name: d.name, mobile: d.mobile, altMobiles: [], past: new Set(), future: new Set() }
+    else if (map[key].mobile !== d.mobile) map[key].altMobiles.push(d.mobile)
+    d.past.forEach(dt => map[key].past.add(dt))
+    d.future.forEach(dt => map[key].future.add(dt))
   })
 
   return Object.values(map).map(d => {
@@ -53,9 +84,26 @@ function buildDevotees(bookings) {
     const tier    = past.length >= 5 ? 'core' : past.length >= 2 ? 'regular' : 'one-time'
     const monthMap = {}
     past.forEach(dt => { const ym = dt.slice(0,7); monthMap[ym] = (monthMap[ym]||0)+1 })
-    return { name:d.name, mobile:d.mobile, total:past.length, futureCount:future.length,
+    return { name:d.name, mobile:d.mobile, altMobiles:d.altMobiles, total:past.length, futureCount:future.length,
       past, future, last:last||'', ds, status, score, tier, monthMap }
   }).sort((a,b) => b.total - a.total)
+}
+
+// Flag near-duplicate names (likely the same person, typo'd) that WEREN'T auto-merged
+// because their names aren't an exact match. Surfaced to the admin instead of auto-merging,
+// since two different real people can legitimately share a very similar/common name.
+function findPossibleDuplicates(devs) {
+  const out = []
+  for (let i = 0; i < devs.length; i++) {
+    for (let j = i + 1; j < devs.length; j++) {
+      const a = devs[i], b = devs[j]
+      const na = normName(a.name), nb = normName(b.name)
+      if (na === nb) continue
+      if (Math.min(na.length, nb.length) < 5) continue
+      if (levenshtein(na, nb) <= 2) out.push([a, b])
+    }
+  }
+  return out
 }
 
 function allMonths(devs) {
@@ -229,7 +277,8 @@ function Drawer({ dev, onClose }) {
         <Av name={dev.name} sz={46}/>
         <div>
           <div style={{fontFamily:"'Cinzel',serif",fontWeight:800,color:'#1e3a8a',fontSize:16}}>{dev.name}</div>
-          <div style={{fontSize:12,color:'rgba(29,78,216,0.5)',marginTop:2}}>📱 {dev.mobile}</div>
+          <div style={{fontSize:12,color:'rgba(29,78,216,0.5)',marginTop:2}}>📱 {dev.mobile}
+            {dev.altMobiles?.length > 0 && <span> (merged with {dev.altMobiles.join(', ')})</span>}</div>
           <div style={{marginTop:6}}><Badge s={dev.status}/></div>
         </div>
         <button onClick={onClose} style={{marginLeft:'auto',width:32,height:32,
@@ -398,6 +447,7 @@ export default function DevoteeTracker({ bookings = [] }) {
   const [tierOpen,setTierOpen]= React.useState(null)
 
   const ALL = React.useMemo(() => buildDevotees(bookings), [bookings])
+  const dupWarnings = React.useMemo(() => findPossibleDuplicates(ALL), [ALL])
 
   const devs = React.useMemo(() => {
     let d = ALL
@@ -481,6 +531,22 @@ export default function DevoteeTracker({ bookings = [] }) {
           />
         ))}
       </div>
+
+      {/* ── Possible duplicate devotees (similar names, different mobile numbers) ── */}
+      {dupWarnings.length > 0 && (
+        <div style={{background:'#fee2e2',border:'1.5px solid #fca5a5',borderRadius:14,
+          padding:'14px 16px'}}>
+          <div style={{fontSize:13,fontWeight:800,color:'#991b1b',marginBottom:8}}>
+            🔎 Possible duplicate devotees — check before trusting their status
+          </div>
+          {dupWarnings.map(([a,b],i)=>(
+            <div key={i} style={{fontSize:12,color:'#7f1d1d',marginBottom:6}}>
+              <b>{a.name}</b> ({a.mobile}, {a.status}) looks similar to <b>{b.name}</b> ({b.mobile}, {b.status}).
+              If these are the same person, their combined recent activity may make the "at risk"/"inactive" tag wrong.
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Attention strip ── */}
       <Attention devs={ALL}/>
