@@ -1,858 +1,802 @@
 // ============================================================
-//  DashboardTab v2 — Analytics Dashboard (Admin only)
-//  ─────────────────────────────────────────────────────────
-//  New in v2:
-//  • Clickable KPI cards → drill-down detail drawer
-//  • Member graph: most-active bar chart + sort/filter
-//  • Trends: filters by slot (All/Morning/Evening) + month range
-//  • Upcoming: filter by slot + search by name
+//  DevoteeTracker — Production ready, zero overflow bugs
+//  Props: bookings[] from App.jsx (live Google Sheets data)
 // ============================================================
-
 import React from 'react'
-import DevoteeTracker from './DevoteeTracker.jsx'
 
-const BLUE   = '#1d4ed8'
-const TEAL   = '#0f6e56'
-const AMBER  = '#b45309'
-const PURPLE = '#6d28d9'
-const GREEN  = '#15803d'
+// ── Constants ─────────────────────────────────────────────────
+const SC = { active:'#15803d', 'at-risk':'#b45309', inactive:'#dc2626' }
+const SB = { active:'#dcfce7', 'at-risk':'#fef3c7', inactive:'#fee2e2' }
+const AV_BG   = ['#bfdbfe','#a7f3d0','#fed7aa','#ddd6fe','#fecaca','#d1fae5','#fde68a','#e0e7ff']
+const AV_TEXT = ['#1e40af','#065f46','#92400e','#4c1d95','#991b1b','#064e3b','#78350f','#3730a3']
 
-const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const DAYS_FULL   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-const DAYS_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+// ── Pure helpers ──────────────────────────────────────────────
+const ci  = n => { let h=0; for(const c of n) h=(h*31+c.charCodeAt(0))&0xffff; return h%8 }
+const ini = n => { const p=n.trim().split(/\s+/); return (p[0][0]+(p[1]?p[1][0]:'')).toUpperCase() }
 
-const AVATAR_BG   = ['#bfdbfe','#a7f3d0','#fed7aa','#ddd6fe','#fecaca','#d1fae5','#fde68a','#e0e7ff','#fce7f3','#cffafe']
-const AVATAR_TEXT = ['#1e40af','#065f46','#92400e','#4c1d95','#991b1b','#064e3b','#78350f','#3730a3','#831843','#164e63']
+// normalize a name for identity comparisons: lowercase, collapse whitespace
+const normName = n => n.trim().toLowerCase().replace(/\s+/g, ' ')
 
-function getTodayStr() {
-  const t = new Date(); t.setHours(0,0,0,0)
-  return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`
-}
-function fmtDate(s) {
-  if (!s) return ''
-  const d = new Date(s + 'T00:00:00')
-  return d.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
-}
-function initials(name) {
-  const p = (name||'').trim().split(' ').filter(Boolean)
-  if (p.length >= 2) return (p[0][0]+p[p.length-1][0]).toUpperCase()
-  return (name||'??').substring(0,2).toUpperCase()
+// classic edit distance — used to flag likely-typo duplicate names (e.g. "Sulaghna Ghosh" vs "Sulghna Ghosh")
+function levenshtein(a, b) {
+  const m = a.length, n = b.length
+  if (!m) return n; if (!n) return m
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+  return dp[m][n]
 }
 
-// ── Chart.js CDN loader ───────────────────────────────────────
-function useChartJs() {
-  const [ready, setReady] = React.useState(!!window.Chart)
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+function daysSince(dateStr) {
+  const now = new Date(); now.setHours(0,0,0,0)
+  return Math.round((now - new Date(dateStr + 'T00:00:00')) / 86400000)
+}
+function monthLabel(ym) {
+  return new Date(ym + '-01T00:00:00').toLocaleDateString('en-IN', { month: 'short' })
+}
+
+// ── Build devotees ────────────────────────────────────────────
+function buildDevotees(bookings) {
+  const NOW = localToday()
+  const byMobile = {}
+  bookings.forEach(b => {
+    const mob  = (b.mobile || '').trim()
+    const name = (b.name   || '').trim()
+    const date = (b.date   || '').slice(0, 10)
+    if (!mob || date.length < 10) return
+    if (!byMobile[mob]) byMobile[mob] = { name, mobile: mob, past: new Set(), future: new Set() }
+    byMobile[mob].name = name
+    date <= NOW ? byMobile[mob].past.add(date) : byMobile[mob].future.add(date)
+  })
+
+  // Bug fix: the same devotee can end up with two different mobile numbers on file
+  // (typo'd digit, used a family member's phone, re-registered later, etc). Left
+  // as-is, that split a single person's history into two rows — one of which could
+  // sit on old dates and get wrongly flagged "at risk"/"inactive" even though the
+  // person, under their other number, booked recently. We merge records that share
+  // the exact same normalized name (safe/deterministic) before computing status, so
+  // status reflects the person's FULL booking history rather than half of it.
+  const map = {}
+  Object.values(byMobile).forEach(d => {
+    const key = normName(d.name)
+    if (!map[key]) map[key] = { name: d.name, mobile: d.mobile, altMobiles: [], past: new Set(), future: new Set() }
+    else if (map[key].mobile !== d.mobile) map[key].altMobiles.push(d.mobile)
+    d.past.forEach(dt => map[key].past.add(dt))
+    d.future.forEach(dt => map[key].future.add(dt))
+  })
+
+  return Object.values(map).map(d => {
+    const past    = [...d.past].sort()
+    const future  = [...d.future].sort()
+    const last    = past.length ? past[past.length - 1] : null
+    const ds      = last ? daysSince(last) : 9999
+    const status  = ds <= 30 ? 'active' : ds <= 90 ? 'at-risk' : 'inactive'
+    const bPts    = Math.min(50, past.length * 5)
+    const sPts    = status === 'active' ? 30 : status === 'at-risk' ? 15 : 0
+    const rPts    = ds <= 90 ? Math.round(20 * (1 - ds / 90)) : 0
+    const score   = bPts + sPts + rPts
+    const tier    = past.length >= 5 ? 'core' : past.length >= 2 ? 'regular' : 'one-time'
+    const monthMap = {}
+    past.forEach(dt => { const ym = dt.slice(0,7); monthMap[ym] = (monthMap[ym]||0)+1 })
+    return { name:d.name, mobile:d.mobile, altMobiles:d.altMobiles, total:past.length, futureCount:future.length,
+      past, future, last:last||'', ds, status, score, tier, monthMap }
+  }).sort((a,b) => b.total - a.total)
+}
+
+// Flag near-duplicate names (likely the same person, typo'd) that WEREN'T auto-merged
+// because their names aren't an exact match. Surfaced to the admin instead of auto-merging,
+// since two different real people can legitimately share a very similar/common name.
+function findPossibleDuplicates(devs) {
+  const out = []
+  for (let i = 0; i < devs.length; i++) {
+    for (let j = i + 1; j < devs.length; j++) {
+      const a = devs[i], b = devs[j]
+      const na = normName(a.name), nb = normName(b.name)
+      if (na === nb) continue
+      if (Math.min(na.length, nb.length) < 5) continue
+      if (levenshtein(na, nb) <= 2) out.push([a, b])
+    }
+  }
+  return out
+}
+
+function allMonths(devs) {
+  const s = new Set()
+  devs.forEach(d => Object.keys(d.monthMap).forEach(ym => s.add(ym)))
+  return [...s].sort()
+}
+
+// ── Chart.js ──────────────────────────────────────────────────
+function useChart() {
+  const [ok, setOk] = React.useState(!!window.Chart)
   React.useEffect(() => {
-    if (window.Chart) { setReady(true); return }
+    if (window.Chart) return
     const s = document.createElement('script')
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js'
-    s.onload = () => setReady(true)
+    s.onload = () => setOk(true)
     document.head.appendChild(s)
   }, [])
-  return ready
+  return ok
 }
 
-// ── Chart components ──────────────────────────────────────────
-function BarChart({ data, labels, color=BLUE, height=120, horizontal=false }) {
-  const ref = React.useRef(null); const ch = React.useRef(null)
+function Chart({ make, watch, h = 220 }) {
+  const ref = React.useRef(); const ok = useChart()
   React.useEffect(() => {
-    if (!ref.current || !window.Chart) return
-    if (ch.current) { ch.current.destroy(); ch.current = null }
-    const type = horizontal ? 'bar' : 'bar'
-    ch.current = new window.Chart(ref.current, {
-      type,
-      data: { labels, datasets: [{ data, backgroundColor: color+'bb', borderRadius: 5, borderWidth: 0 }] },
-      options: {
-        indexAxis: horizontal ? 'y' : 'x',
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: true } },
-        scales: {
-          x: { grid: { display: !horizontal }, ticks: { font:{size:10}, color:'#6b7280', maxRotation: horizontal?0:30 } },
-          y: { beginAtZero:true, grid: { color:'rgba(0,0,0,.04)' }, ticks: { font:{size:10}, color:'#6b7280' } },
-        },
-      },
-    })
-    return () => { if (ch.current) ch.current.destroy() }
-  }, [JSON.stringify(data), JSON.stringify(labels), color, horizontal])
-  return <div style={{position:'relative',width:'100%',height}}><canvas ref={ref} role="img" aria-label="bar chart"/></div>
+    if (!ok || !ref.current) return
+    const c = new window.Chart(ref.current, make())
+    return () => c.destroy()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ok, ...watch])
+  return ok
+    ? <div style={{position:'relative',width:'100%',height:h}}><canvas ref={ref}/></div>
+    : <div style={{height:h,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(29,78,216,0.3)',fontSize:12}}>Loading…</div>
 }
 
-function LineChart({ datasets, labels, height=160 }) {
-  const ref = React.useRef(null); const ch = React.useRef(null)
-  React.useEffect(() => {
-    if (!ref.current || !window.Chart) return
-    if (ch.current) { ch.current.destroy(); ch.current = null }
-    ch.current = new window.Chart(ref.current, {
-      type: 'line',
-      data: { labels, datasets },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: datasets.length > 1 }, tooltip: { enabled: true } },
-        scales: {
-          x: { grid:{display:false}, ticks:{font:{size:10},color:'#6b7280'} },
-          y: { beginAtZero:true, grid:{color:'rgba(0,0,0,.04)'}, ticks:{font:{size:10},color:'#6b7280',stepSize:1} },
-        },
-      },
-    })
-    return () => { if (ch.current) ch.current.destroy() }
-  }, [JSON.stringify(datasets), JSON.stringify(labels)])
-  return <div style={{position:'relative',width:'100%',height}}><canvas ref={ref} role="img" aria-label="line chart"/></div>
-}
-
-function Doughnut({ slices, height=130 }) {
-  const ref = React.useRef(null); const ch = React.useRef(null)
-  React.useEffect(() => {
-    if (!ref.current || !window.Chart) return
-    if (ch.current) { ch.current.destroy(); ch.current = null }
-    ch.current = new window.Chart(ref.current, {
-      type: 'doughnut',
-      data: {
-        labels: slices.map(s=>s.label),
-        datasets: [{ data: slices.map(s=>s.value), backgroundColor: slices.map(s=>s.color+'bb'), borderWidth:0 }],
-      },
-      options: { responsive:true, maintainAspectRatio:false, cutout:'65%',
-        plugins: { legend:{display:false}, tooltip:{enabled:true} } },
-    })
-    return () => { if (ch.current) ch.current.destroy() }
-  }, [JSON.stringify(slices)])
-  return <div style={{position:'relative',width:'100%',height}}><canvas ref={ref} role="img" aria-label="doughnut chart"/></div>
-}
-
-// ── UI primitives ─────────────────────────────────────────────
-function Card({ children, style={} }) {
+// ── Atoms ─────────────────────────────────────────────────────
+function Av({ name, sz = 32 }) {
+  const i = ci(name)
   return (
-    <div style={{ background:'rgba(255,255,255,0.78)', borderRadius:16,
-      padding:'16px', border:'1px solid rgba(59,130,246,0.15)', ...style }}>
-      {children}
+    <div style={{
+      width:sz, height:sz, borderRadius:'50%', flexShrink:0,
+      background:AV_BG[i], color:AV_TEXT[i],
+      display:'flex', alignItems:'center', justifyContent:'center',
+      fontSize:sz*0.35, fontWeight:800,
+      // critical: prevent bleed
+      minWidth:sz, overflow:'hidden',
+    }}>{ini(name)}</div>
+  )
+}
+
+function Badge({ s }) {
+  return <span style={{fontSize:10,fontWeight:800,padding:'2px 7px',borderRadius:20,
+    background:SB[s]||'#f3f4f6',color:SC[s]||'#6b7280',
+    textTransform:'uppercase',letterSpacing:'0.4px',flexShrink:0}}>{s}</span>
+}
+
+// ── Attention strip ───────────────────────────────────────────
+function Attention({ devs }) {
+  const list = devs.filter(d => d.status !== 'active').sort((a,b) => b.ds - a.ds).slice(0, 5)
+  if (!list.length) return null
+  return (
+    <div style={{background:'#fef9c3',border:'1.5px solid #fcd34d',borderRadius:14,
+      padding:'14px 16px',marginBottom:0}}>
+      <div style={{fontSize:13,fontWeight:800,color:'#92400e',marginBottom:10}}>
+        ⚠️ Needs your attention
+      </div>
+      {list.map(d => (
+        <div key={d.mobile} style={{display:'flex',alignItems:'center',gap:10,
+          flexWrap:'wrap',fontSize:13,marginBottom:8,
+          // prevent avatar overflow
+          overflow:'hidden'}}>
+          <Av name={d.name} sz={24}/>
+          <span style={{fontWeight:700,color:'#78350f',flexShrink:0}}>{d.name}</span>
+          <span style={{color:'rgba(120,53,15,0.65)',fontSize:12}}>
+            — last seen <b>{d.ds === 9999 ? '—' : d.ds + 'd ago'}</b>
+            {d.last ? ` (${d.last})` : ''}
+          </span>
+          <Badge s={d.status}/>
+        </div>
+      ))}
     </div>
   )
 }
-function SecTitle({ children }) {
-  return <div style={{ fontSize:10, fontWeight:800, color:'rgba(29,78,216,0.45)',
-    textTransform:'uppercase', letterSpacing:'1.5px', marginBottom:10 }}>{children}</div>
-}
-function Pill({ label, active, onClick, color=BLUE }) {
-  return (
-    <button onClick={onClick} style={{
-      padding:'6px 13px', borderRadius:20, border:'none', cursor:'pointer', fontSize:12,
-      fontWeight:700, transition:'all .15s',
-      background: active ? color : 'rgba(239,246,255,0.8)',
-      color: active ? '#fff' : 'rgba(29,78,216,0.55)',
-      boxShadow: active ? `0 2px 8px ${color}44` : 'none',
-    }}>
-      {label}
-    </button>
-  )
-}
 
-// ── Drill-down drawer (slides up from bottom) ─────────────────
-function Drawer({ title, onClose, children }) {
+// ── Tier card ─────────────────────────────────────────────────
+function TierCard({ id, label, list, open, onToggle, onSelect }) {
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:4000,
-      background:'rgba(0,0,0,0.4)', backdropFilter:'blur(3px)',
-      display:'flex', alignItems:'flex-end' }}
-      onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{
-        width:'100%', maxHeight:'82vh',
-        background:'linear-gradient(160deg,#f0f6ff,#e8f0fe)',
-        borderRadius:'20px 20px 0 0',
-        boxShadow:'0 -8px 40px rgba(29,78,216,0.18)',
-        display:'flex', flexDirection:'column',
-        animation:'slideUp .25s ease',
+    // position:relative + overflow:visible so dropdown doesn't clip
+    <div style={{position:'relative'}}>
+      <div onClick={onToggle} style={{
+        background:'rgba(255,255,255,0.82)',
+        border:`2px solid ${open ? 'rgba(29,78,216,0.45)' : 'rgba(59,130,246,0.18)'}`,
+        borderRadius:14, padding:'12px 14px', cursor:'pointer',
+        textAlign:'center', transition:'border-color .15s', userSelect:'none',
       }}>
-        <style>{`@keyframes slideUp{from{transform:translateY(60px);opacity:0}to{transform:none;opacity:1}}`}</style>
-        {/* Handle */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-          padding:'16px 18px 12px', borderBottom:'1px solid rgba(59,130,246,0.12)', flexShrink:0 }}>
-          <div style={{ fontFamily:"'Cinzel',serif", fontWeight:800, color:'#1e3a8a', fontSize:14 }}>
-            {title}
-          </div>
-          <button onClick={onClose} style={{ width:30, height:30, borderRadius:'50%', border:'none',
-            background:'rgba(29,78,216,0.1)', cursor:'pointer', fontSize:15, color:'#1e3a8a',
-            display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900 }}>✕</button>
-        </div>
-        <div style={{ overflowY:'auto', padding:'14px 18px 24px', flex:1 }}>
-          {children}
+        <div style={{fontSize:10,color:'rgba(29,78,216,0.5)',fontWeight:800,
+          textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:4}}>{label}</div>
+        <div style={{fontSize:30,fontWeight:900,color:'#1e3a8a',
+          fontFamily:"'Cinzel',serif",lineHeight:1}}>{list.length}</div>
+        <div style={{fontSize:10,color:'rgba(29,78,216,0.4)',marginTop:4}}>
+          {open ? '▲ Hide' : '▼ Show members'}
         </div>
       </div>
-    </div>
-  )
-}
 
-// ── Clickable KPI card ────────────────────────────────────────
-function KPICard({ label, value, sub, color=BLUE, onClick }) {
-  const [hov, setHov] = React.useState(false)
-  return (
-    <div onClick={onClick}
-      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{
-        background: hov ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.78)',
-        borderRadius:14, padding:'14px 16px',
-        border: hov ? `1.5px solid ${color}55` : '1px solid rgba(59,130,246,0.15)',
-        flex:'1 1 130px', cursor: onClick ? 'pointer' : 'default',
-        transition:'all .18s',
-        boxShadow: hov ? `0 4px 18px ${color}22` : 'none',
-        position:'relative',
-      }}>
-      {onClick && (
-        <div style={{ position:'absolute', top:10, right:10, fontSize:10,
-          color: color+'99', fontWeight:700 }}>↗</div>
+      {open && (
+        <div style={{
+          position:'absolute', top:'calc(100% + 6px)', left:0,
+          minWidth:200, width:'max-content', maxWidth:'90vw',
+          background:'#ffffff',
+          border:'1.5px solid rgba(59,130,246,0.25)',
+          borderRadius:12, padding:'10px 12px',
+          display:'flex', flexDirection:'column', gap:8,
+          zIndex:200,
+          boxShadow:'0 8px 24px rgba(29,78,216,0.12)',
+          maxHeight:320, overflowY:'auto',
+        }}>
+          {list.map(d => (
+            <div key={d.mobile}
+              onClick={() => onSelect(d)}
+              style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',
+                padding:'6px 4px',borderRadius:8,
+                transition:'background .1s'}}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(239,246,255,0.8)'}
+              onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+              <Av name={d.name} sz={28}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:'#1e3a8a',
+                  whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{d.name}</div>
+                <div style={{fontSize:10,color:'rgba(29,78,216,0.5)',
+                  display:'flex',alignItems:'center',gap:5,marginTop:1}}>
+                  {d.total} bookings · <Badge s={d.status}/>
+                </div>
+              </div>
+              <span style={{fontSize:14,fontWeight:900,color:'#1e3a8a',flexShrink:0}}>{d.total}</span>
+            </div>
+          ))}
+        </div>
       )}
-      <div style={{ fontSize:10, color:'rgba(29,78,216,0.5)', fontWeight:700,
-        textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:6 }}>{label}</div>
-      <div style={{ fontSize:28, fontWeight:900, color, fontFamily:"'Cinzel',serif", lineHeight:1 }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize:11, color:'rgba(29,78,216,0.4)', marginTop:5 }}>{sub}</div>}
     </div>
   )
 }
 
-// ════════════════════════════════════════════════════════════
-//  Main component
-// ════════════════════════════════════════════════════════════
-export default function DashboardTab({ bookings=[], satsangBookings=[] }) {
-  const chartReady = useChartJs()
-  const today = getTodayStr()
-  const [page,   setPage]   = React.useState('exec')
-  const [drawer, setDrawer] = React.useState(null) // null | 'total'|'devotees'|'avg'|'upcoming'
+// ── Detail drawer ─────────────────────────────────────────────
+function Drawer({ dev, onClose }) {
+  const cols   = Object.keys(dev.monthMap).sort()
+  const labels = cols.map(monthLabel)
+  const counts = cols.map(ym => dev.monthMap[ym])
+  const c      = ci(dev.name)
 
-  // ── Filters (used across pages) ───────────────────────────
-  const [slotFilter,   setSlotFilter]   = React.useState('all')   // all|morning|evening
-  const [memberSort,   setMemberSort]   = React.useState('count') // count|name|recent
-  const [memberSearch, setMemberSearch] = React.useState('')
-  const [upSearch,     setUpSearch]     = React.useState('')
-  const [upSlot,       setUpSlot]       = React.useState('all')
-
-  // ── Core analytics ────────────────────────────────────────
-  // Bug fix: stats should reflect what's actually happened so far, not bookings
-  // for future dates that haven't occurred yet. Only the "Upcoming" tab (below)
-  // is supposed to look forward — everything else here is till today only.
-  const pastBookings = React.useMemo(
-    () => bookings.filter(b => (b.date || '').slice(0, 10) <= today),
-    [bookings, today]
-  )
-
-  const A = React.useMemo(() => {
-    const total   = pastBookings.length
-    const morning = pastBookings.filter(b=>b.time==='Morning').length
-    const evening = pastBookings.filter(b=>b.time==='Evening').length
-
-    // Member map keyed by mobile (fallback name)
-    const mmap = {}
-    pastBookings.forEach(b => {
-      const k = b.mobile || b.name
-      if (!mmap[k]) mmap[k] = { name:b.name, mobile:b.mobile||'', count:0, morningCount:0, eveningCount:0, dates:[], months:new Set() }
-      mmap[k].count++
-      if (b.time==='Morning') mmap[k].morningCount++
-      else mmap[k].eveningCount++
-      mmap[k].dates.push(b.date)
-      mmap[k].months.add((b.date||'').slice(0,7))
-    })
-    const members = Object.values(mmap).map(m => ({
-      ...m, months: m.months.size,
-      lastDate: m.dates.filter(Boolean).sort().slice(-1)[0] || '',
-      firstDate: m.dates.filter(Boolean).sort()[0] || '',
-    }))
-
-    // Day counts
-    const dayCounts = [0,0,0,0,0,0,0]
-    pastBookings.forEach(b => { if (b.date) dayCounts[new Date(b.date+'T00:00:00').getDay()]++ })
-
-    // Monthly
-    const monthMap = {}
-    pastBookings.forEach(b => {
-      const m = (b.date||'').slice(0,7); if (!m) return
-      if (!monthMap[m]) monthMap[m] = { all:0, morning:0, evening:0 }
-      monthMap[m].all++
-      if (b.time==='Morning') monthMap[m].morning++; else monthMap[m].evening++
-    })
-    const sortedMonths = Object.keys(monthMap).sort()
-
-    // Upcoming — this ONE metric intentionally looks forward from today,
-    // using the full (unfiltered) bookings list, not pastBookings.
-    const in30 = new Date(today); in30.setDate(in30.getDate()+30)
-    const in30s = in30.toISOString().slice(0,10)
-    const upcoming = bookings.filter(b=>b.date>=today && b.date<=in30s).sort((a,b)=>a.date.localeCompare(b.date))
-
-    const uniqueMembers = members.length
-    const avgPerMonth   = sortedMonths.length ? Math.round(total/sortedMonths.length) : 0
-
-    return { total, morning, evening, members, dayCounts, monthMap, sortedMonths, upcoming, uniqueMembers, avgPerMonth }
-  }, [pastBookings, bookings, today])
-
-  // ── Filtered members ──────────────────────────────────────
-  const filteredMembers = React.useMemo(() => {
-    let list = [...A.members]
-    if (memberSearch.trim()) {
-      const q = memberSearch.toLowerCase()
-      list = list.filter(m => m.name.toLowerCase().includes(q) || m.mobile.includes(q))
-    }
-    if (slotFilter === 'morning') list = list.filter(m => m.morningCount > 0)
-    if (slotFilter === 'evening') list = list.filter(m => m.eveningCount > 0)
-    if (memberSort === 'count')  list.sort((a,b)=>b.count-a.count)
-    if (memberSort === 'name')   list.sort((a,b)=>a.name.localeCompare(b.name))
-    if (memberSort === 'recent') list.sort((a,b)=>b.lastDate.localeCompare(a.lastDate))
-    if (memberSort === 'months') list.sort((a,b)=>b.months-a.months)
-    return list
-  }, [A.members, memberSearch, slotFilter, memberSort])
-
-  // ── Trend data (filtered by slot) ────────────────────────
-  const trendData = React.useMemo(() => {
-    return A.sortedMonths.map(m => {
-      const d = A.monthMap[m]
-      if (slotFilter==='morning') return d.morning
-      if (slotFilter==='evening') return d.evening
-      return d.all
-    })
-  }, [A.monthMap, A.sortedMonths, slotFilter])
-
-  const trendLabels = A.sortedMonths.map(m => {
-    const [,mm] = m.split('-'); return MONTH_SHORT[parseInt(mm,10)-1]
-  })
-
-  // ── Upcoming filtered ─────────────────────────────────────
-  const filteredUpcoming = React.useMemo(() => {
-    return A.upcoming.filter(b => {
-      if (upSlot==='morning' && b.time!=='Morning') return false
-      if (upSlot==='evening' && b.time!=='Evening') return false
-      if (upSearch.trim() && !b.name.toLowerCase().includes(upSearch.toLowerCase())) return false
-      return true
-    })
-  }, [A.upcoming, upSlot, upSearch])
-
-  // ── Nav ───────────────────────────────────────────────────
-  const NAV = [
-    { id:'exec',     label:'📊 Summary'  },
-    { id:'members',  label:'🪷 Members'  },
-    { id:'trends',   label:'📈 Trends'   },
-    { id:'upcoming', label:'🗓️ Upcoming' },
-    { id:'devotees', label:'🧘 Devotees' },
-  ]
-  const navSt = id => ({
-    flex:'0 0 auto', padding:'9px 10px', border:'none', borderRadius:12, cursor:'pointer',
-    fontFamily:"'Cinzel',serif", fontSize:11, fontWeight:800, transition:'all .18s',
-    whiteSpace:'nowrap',
-    background: page===id ? 'linear-gradient(135deg,#1e3a8a,#3b82f6)' : 'rgba(239,246,255,0.7)',
-    color: page===id ? '#fff' : 'rgba(29,78,216,0.55)',
-    boxShadow: page===id ? '0 3px 12px rgba(29,78,216,0.25)' : 'none',
-  })
-
-  // ── Drawer content factories ──────────────────────────────
-  function DrawerContent({ type }) {
-    if (type==='total') return (
-      <div>
-        <div style={{fontSize:13,color:'rgba(29,78,216,0.6)',marginBottom:14}}>
-          All <b style={{color:BLUE}}>{A.total}</b> prayer bookings across all time
-        </div>
-        <SecTitle>Breakdown by slot</SecTitle>
-        <div style={{display:'flex',gap:10,marginBottom:16}}>
-          {[{label:'Morning 🌅',val:A.morning,col:'#1d4ed8'},{label:'Evening 🌙',val:A.evening,col:'#d97706'}].map(s=>(
-            <div key={s.label} style={{flex:1,padding:'12px',borderRadius:12,
-              background:`${s.col}11`,border:`1px solid ${s.col}33`,textAlign:'center'}}>
-              <div style={{fontSize:11,color:s.col,fontWeight:700,marginBottom:4}}>{s.label}</div>
-              <div style={{fontSize:24,fontWeight:900,color:s.col,fontFamily:"'Cinzel',serif"}}>{s.val}</div>
-              <div style={{fontSize:10,color:s.col+'99',marginTop:3}}>
-                {Math.round(s.val/(A.total||1)*100)}% of total
-              </div>
-            </div>
-          ))}
-        </div>
-        <SecTitle>Monthly trend</SecTitle>
-        {chartReady && <LineChart
-          datasets={[{data:A.sortedMonths.map(m=>A.monthMap[m].all),borderColor:BLUE,backgroundColor:BLUE+'18',fill:true,tension:.4,pointRadius:4,pointBackgroundColor:BLUE,borderWidth:2}]}
-          labels={trendLabels} height={150}/>}
-        <SecTitle style={{marginTop:14}}>Day of week</SecTitle>
-        {chartReady && <BarChart data={A.dayCounts} labels={DAYS_SHORT} color={TEAL} height={100}/>}
-      </div>
-    )
-
-    if (type==='devotees') return (
-      <div>
-        <div style={{fontSize:13,color:'rgba(29,78,216,0.6)',marginBottom:14}}>
-          <b style={{color:TEAL}}>{A.uniqueMembers}</b> unique devotees have made bookings
-        </div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:10,marginBottom:16}}>
-          {[
-            {label:'Core (5+ bookings)', val:A.members.filter(m=>m.count>=5).length, col:GREEN},
-            {label:'Regular (2–4)',       val:A.members.filter(m=>m.count>=2&&m.count<5).length, col:BLUE},
-            {label:'One-time',            val:A.members.filter(m=>m.count===1).length, col:'#6b7280'},
-          ].map(s=>(
-            <div key={s.label} style={{flex:'1 1 90px',padding:'11px',borderRadius:12,
-              background:`${s.col}11`,border:`1px solid ${s.col}33`,textAlign:'center'}}>
-              <div style={{fontSize:10,color:s.col,fontWeight:700,marginBottom:4,lineHeight:1.3}}>{s.label}</div>
-              <div style={{fontSize:22,fontWeight:900,color:s.col,fontFamily:"'Cinzel',serif"}}>{s.val}</div>
-            </div>
-          ))}
-        </div>
-        <SecTitle>Top 10 devotees</SecTitle>
-        {[...A.members].sort((a,b)=>b.count-a.count).slice(0,10).map((m,i)=>{
-          const ci=i%AVATAR_BG.length
-          return (
-            <div key={m.mobile+i} style={{display:'flex',alignItems:'center',gap:10,
-              padding:'9px 0',borderBottom:i<9?'1px solid rgba(59,130,246,0.07)':'none'}}>
-              <div style={{fontSize:12,fontWeight:800,color:i<3?'#d97706':'rgba(29,78,216,0.35)',
-                minWidth:18,textAlign:'center'}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
-              <div style={{width:32,height:32,borderRadius:'50%',background:AVATAR_BG[ci],
-                color:AVATAR_TEXT[ci],display:'flex',alignItems:'center',justifyContent:'center',
-                fontSize:11,fontWeight:800,flexShrink:0}}>{initials(m.name)}</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:"'Cinzel',serif",fontWeight:700,color:'#1e3a8a',
-                  fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
-                <div style={{fontSize:10,color:'rgba(29,78,216,0.4)',marginTop:1}}>{m.mobile}</div>
-              </div>
-              <div style={{fontSize:15,fontWeight:900,color:BLUE}}>{m.count}</div>
-            </div>
-          )
-        })}
-      </div>
-    )
-
-    if (type==='avg') return (
-      <div>
-        <div style={{fontSize:13,color:'rgba(29,78,216,0.6)',marginBottom:14}}>
-          Average of <b style={{color:PURPLE}}>{A.avgPerMonth}</b> bookings per month across{' '}
-          <b style={{color:PURPLE}}>{A.sortedMonths.length}</b> months
-        </div>
-        <SecTitle>All months</SecTitle>
-        {A.sortedMonths.map((m,i)=>{
-          const d=A.monthMap[m]; const maxC=Math.max(...Object.values(A.monthMap).map(x=>x.all))||1
-          const [yr,mm]=m.split('-')
-          return (
-            <div key={m} style={{display:'flex',alignItems:'center',gap:10,
-              padding:'8px 0',borderBottom:i<A.sortedMonths.length-1?'1px solid rgba(59,130,246,0.07)':'none'}}>
-              <div style={{width:58,fontSize:11,fontWeight:700,color:'#1e3a8a',
-                fontFamily:"'Cinzel',serif",flexShrink:0}}>
-                {MONTH_SHORT[parseInt(mm,10)-1]} {yr}
-              </div>
-              <div style={{flex:1,height:7,borderRadius:4,background:'rgba(109,40,217,0.1)',overflow:'hidden'}}>
-                <div style={{height:'100%',borderRadius:4,background:PURPLE+'99',
-                  width:Math.round(d.all/maxC*100)+'%',transition:'width .4s'}}/>
-              </div>
-              <div style={{width:24,fontSize:13,fontWeight:900,color:PURPLE,textAlign:'right'}}>{d.all}</div>
-            </div>
-          )
-        })}
-      </div>
-    )
-
-    if (type==='upcoming') return (
-      <div>
-        <div style={{fontSize:13,color:'rgba(29,78,216,0.6)',marginBottom:14}}>
-          <b style={{color:AMBER}}>{A.upcoming.length}</b> bookings in the next 30 days
-        </div>
-        {A.upcoming.map((b,i)=>{
-          const isMorning=b.time==='Morning'
-          return (
-            <div key={b.id||i} style={{display:'flex',alignItems:'center',gap:10,
-              padding:'10px 0',borderBottom:i<A.upcoming.length-1?'1px solid rgba(59,130,246,0.08)':'none'}}>
-              <div style={{background:'rgba(239,246,255,0.9)',borderRadius:10,padding:'6px 9px',
-                textAlign:'center',minWidth:44,flexShrink:0,border:'1px solid rgba(59,130,246,0.15)'}}>
-                <div style={{fontSize:16,fontWeight:900,color:'#1e3a8a',fontFamily:"'Cinzel',serif",lineHeight:1}}>
-                  {new Date(b.date+'T00:00:00').getDate()}
-                </div>
-                <div style={{fontSize:9,color:'rgba(29,78,216,0.5)',fontWeight:700,marginTop:2}}>
-                  {MONTH_SHORT[new Date(b.date+'T00:00:00').getMonth()]}
-                </div>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:"'Cinzel',serif",fontWeight:700,color:'#1e3a8a',fontSize:13,
-                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.name}</div>
-                <div style={{fontSize:11,color:'rgba(29,78,216,0.4)',marginTop:1}}>
-                  {DAYS_SHORT[new Date(b.date+'T00:00:00').getDay()]}
-                </div>
-              </div>
-              <span style={{fontSize:11,padding:'3px 8px',borderRadius:20,fontWeight:700,flexShrink:0,
-                background:isMorning?'#dbeafe':'#fef3c7',color:isMorning?'#1d4ed8':'#92400e'}}>
-                {isMorning?'🌅':'🌙'} {b.time}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    )
-    return null
+  // weekly heatmap
+  const start = dev.past[0] ? new Date(dev.past[0]+'T00:00:00') : new Date()
+  const end   = new Date(); end.setHours(0,0,0,0)
+  const weeks=[], wlbls=[]
+  let prevM=''
+  for (let w=0; w<80; w++) {
+    const ws = new Date(start); ws.setDate(start.getDate()+w*7)
+    if (ws > end) break
+    const ym = ws.toISOString().slice(0,7)
+    const mn = monthLabel(ym)
+    wlbls.push(mn!==prevM?mn:''); if(mn) prevM=mn
+    const has = dev.past.some(dt=>{const d=new Date(dt+'T00:00:00');return d>=ws&&d<new Date(ws.getTime()+604800000)})
+    weeks.push({has,label:ws.toISOString().slice(0,10)})
   }
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:14}}>
-
-      {/* Drawer */}
-      {drawer && (
-        <Drawer title={{
-          total:'Total Bookings', devotees:'Unique Devotees',
-          avg:'Avg / Month', upcoming:'Upcoming Bookings',
-        }[drawer]} onClose={()=>setDrawer(null)}>
-          <DrawerContent type={drawer}/>
-        </Drawer>
-      )}
+    <div style={{background:'rgba(239,246,255,0.75)',border:'1.5px solid rgba(59,130,246,0.2)',
+      borderRadius:16,padding:18,marginBottom:4}}>
 
       {/* Header */}
-      <Card>
-        <div style={{textAlign:'center',paddingBottom:4}}>
-          <div style={{fontSize:34,marginBottom:6,filter:'drop-shadow(0 0 14px rgba(29,78,216,0.3))',
-            animation:'floatEmoji 3s ease-in-out infinite alternate'}}>📊</div>
-          <div style={{fontFamily:"'Cinzel',serif",color:'#1e3a8a',fontSize:17,fontWeight:800}}>
-            Devotee Analytics
-          </div>
-          <div style={{fontSize:12,color:'rgba(29,78,216,0.45)',marginTop:4}}>
-            Tap any card to explore details
-          </div>
-          <div style={{height:1,background:'linear-gradient(90deg,transparent,rgba(59,130,246,0.3),transparent)',marginTop:12}}/>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16,
+        flexWrap:'wrap'}}>
+        <Av name={dev.name} sz={46}/>
+        <div>
+          <div style={{fontFamily:"'Cinzel',serif",fontWeight:800,color:'#1e3a8a',fontSize:16}}>{dev.name}</div>
+          <div style={{fontSize:12,color:'rgba(29,78,216,0.5)',marginTop:2}}>📱 {dev.mobile}
+            {dev.altMobiles?.length > 0 && <span> (merged with {dev.altMobiles.join(', ')})</span>}</div>
+          <div style={{marginTop:6}}><Badge s={dev.status}/></div>
         </div>
-      </Card>
-
-      {/* Nav */}
-      <div style={{display:'flex',gap:6,background:'rgba(255,255,255,0.6)',
-        borderRadius:14,padding:5,border:'1px solid rgba(59,130,246,0.15)',
-        overflowX:'auto',WebkitOverflowScrolling:'touch',
-        scrollbarWidth:'none',msOverflowStyle:'none'}}>
-        {NAV.map(n=><button key={n.id} style={navSt(n.id)} onClick={()=>setPage(n.id)}>{n.label}</button>)}
+        <button onClick={onClose} style={{marginLeft:'auto',width:32,height:32,
+          borderRadius:'50%',border:'none',background:'rgba(29,78,216,0.1)',
+          cursor:'pointer',fontSize:16,color:'#1e3a8a',fontWeight:900,flexShrink:0}}>✕</button>
       </div>
 
-      {/* ════ EXECUTIVE SUMMARY ════ */}
-      {page==='exec' && (
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
-
-          {/* KPI row — all clickable */}
-          <div style={{display:'flex',flexWrap:'wrap',gap:10}}>
-            <KPICard label="Total Bookings"   value={A.total}          sub="all time"           color={BLUE}   onClick={()=>setDrawer('total')}/>
-            <KPICard label="Unique Devotees"  value={A.uniqueMembers}  sub="registered"         color={TEAL}   onClick={()=>setDrawer('devotees')}/>
-            <KPICard label="Avg / Month"      value={A.avgPerMonth}    sub="bookings per month" color={PURPLE} onClick={()=>setDrawer('avg')}/>
-            <KPICard label="Upcoming"         value={A.upcoming.length} sub="next 30 days"       color={AMBER}  onClick={()=>setDrawer('upcoming')}/>
+      {/* Stats */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(90px,1fr))',
+        gap:8,marginBottom:16}}>
+        {[['Past bookings',dev.total],['Upcoming',dev.futureCount],
+          ['Days since',dev.ds===9999?'—':dev.ds+'d'],
+          ['Next booking',dev.future[0]||'—'],
+          ['Seva score',dev.score+'/100']
+        ].map(([l,v])=>(
+          <div key={l} style={{background:'rgba(255,255,255,0.85)',borderRadius:10,padding:'9px 12px'}}>
+            <div style={{fontSize:10,color:'rgba(29,78,216,0.45)',fontWeight:700,
+              textTransform:'uppercase',marginBottom:3}}>{l}</div>
+            <div style={{fontSize:16,fontWeight:900,color:'#1e3a8a'}}>{v}</div>
           </div>
+        ))}
+      </div>
 
-          {/* Morning vs Evening */}
-          <Card>
-            <SecTitle>Morning vs Evening</SecTitle>
-            {chartReady
-              ? <Doughnut slices={[{label:'Morning',value:A.morning,color:'#1d4ed8'},{label:'Evening',value:A.evening,color:'#d97706'}]}/>
-              : <div style={{height:130,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(29,78,216,0.3)',fontSize:13}}>Loading…</div>}
-            <div style={{display:'flex',justifyContent:'center',gap:20,marginTop:10,fontSize:12}}>
-              {[{l:'Morning',v:A.morning,c:'#1d4ed8'},{l:'Evening',v:A.evening,c:'#d97706'}].map(s=>(
-                <span key={s.l} style={{display:'flex',alignItems:'center',gap:5}}>
-                  <span style={{width:9,height:9,borderRadius:2,background:s.c,display:'inline-block'}}/>
-                  <span style={{color:s.c,fontWeight:700}}>{s.l} {s.v} ({Math.round(s.v/(A.total||1)*100)}%)</span>
-                </span>
-              ))}
-            </div>
-          </Card>
+      {/* Monthly chart */}
+      {cols.length > 0 && (
+        <Chart h={160} watch={[dev.mobile]} make={()=>({
+          type:'bar',
+          data:{labels,datasets:[{data:counts,
+            backgroundColor:counts.map(v=>v>0?AV_BG[c]:'rgba(239,246,255,0.5)'),
+            borderColor:counts.map(v=>v>0?AV_TEXT[c]:'rgba(59,130,246,0.15)'),
+            borderWidth:1,borderRadius:3}]},
+          options:{responsive:true,maintainAspectRatio:false,
+            plugins:{legend:{display:false},
+              title:{display:true,text:'Monthly past bookings',font:{size:12},color:'#6b7280'}},
+            scales:{x:{ticks:{font:{size:10}},grid:{display:false}},
+              y:{beginAtZero:true,ticks:{font:{size:10},stepSize:1},
+                grid:{color:'rgba(0,0,0,0.05)'}}}}
+        })}/>
+      )}
 
-          {/* Day of week */}
-          <Card>
-            <SecTitle>Bookings by day of week</SecTitle>
-            {chartReady
-              ? <BarChart data={A.dayCounts} labels={DAYS_SHORT} color={TEAL} height={110}/>
-              : <div style={{height:110,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(29,78,216,0.3)',fontSize:13}}>Loading…</div>}
-            {(() => {
-              const max=Math.max(...A.dayCounts); const peak=DAYS_FULL[A.dayCounts.indexOf(max)]
-              return <div style={{marginTop:10,fontSize:12,color:'rgba(29,78,216,0.6)',textAlign:'center',fontWeight:600}}>
-                🏆 Busiest: <span style={{color:TEAL,fontWeight:800}}>{peak}</span> ({max} bookings)
-              </div>
-            })()}
-          </Card>
-
+      {/* Weekly heatmap */}
+      {weeks.length > 0 && (
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:11,color:'rgba(29,78,216,0.45)',fontWeight:700,marginBottom:6}}>
+            Week-by-week activity
+          </div>
+          <div style={{display:'flex',gap:2,overflowX:'auto',paddingBottom:4}}>
+            {weeks.map((w,i)=>(
+              <div key={i} title={`${w.label}${w.has?' — booked':''}`}
+                style={{width:13,height:13,borderRadius:2,flexShrink:0,
+                  background:w.has?AV_TEXT[c]:'#e0e7ff'}}/>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:2,marginTop:2}}>
+            {wlbls.map((l,i)=>(
+              <div key={i} style={{width:13,fontSize:8,color:'rgba(29,78,216,0.35)',
+                textAlign:'center',flexShrink:0}}>{l}</div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ════ MEMBER ANALYTICS ════ */}
-      {page==='members' && (
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
-
-          {/* Filters */}
-          <Card style={{padding:'12px 14px'}}>
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-
-              {/* Search */}
-              <div style={{position:'relative'}}>
-                <input
-                  placeholder="🔍  Search by name or mobile…"
-                  value={memberSearch}
-                  onChange={e=>setMemberSearch(e.target.value)}
-                  style={{width:'100%',padding:'10px 36px 10px 12px',borderRadius:11,
-                    border:'1px solid rgba(59,130,246,0.2)',background:'rgba(239,246,255,0.8)',
-                    fontSize:13,outline:'none',boxSizing:'border-box'}}
-                />
-                {memberSearch && (
-                  <button onClick={()=>setMemberSearch('')}
-                    style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',
-                      background:'none',border:'none',cursor:'pointer',fontSize:14,
-                      color:'rgba(29,78,216,0.4)'}}>✕</button>
-                )}
-              </div>
-
-              {/* Slot filter */}
-              <div>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(29,78,216,0.45)',
-                  textTransform:'uppercase',letterSpacing:'1px',marginBottom:6}}>Slot</div>
-                <div style={{display:'flex',gap:6}}>
-                  {[{id:'all',l:'All'},{id:'morning',l:'🌅 Morning'},{id:'evening',l:'🌙 Evening'}].map(f=>(
-                    <Pill key={f.id} label={f.l} active={slotFilter===f.id} onClick={()=>setSlotFilter(f.id)} color={BLUE}/>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sort */}
-              <div>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(29,78,216,0.45)',
-                  textTransform:'uppercase',letterSpacing:'1px',marginBottom:6}}>Sort by</div>
-                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-                  {[
-                    {id:'count', l:'Most active'},
-                    {id:'months',l:'Most months'},
-                    {id:'recent',l:'Most recent'},
-                    {id:'name',  l:'Name A–Z'},
-                  ].map(s=>(
-                    <Pill key={s.id} label={s.l} active={memberSort===s.id} onClick={()=>setMemberSort(s.id)} color={PURPLE}/>
-                  ))}
-                </div>
-              </div>
-
+      {/* Booking history */}
+      <div style={{marginTop:14}}>
+        <div style={{fontSize:11,color:'rgba(29,78,216,0.45)',fontWeight:700,marginBottom:6}}>
+          Booking history
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:220,overflowY:'auto'}}>
+          {[...dev.past].reverse().map(dt=>(
+            <div key={'p'+dt} style={{display:'flex',alignItems:'center',gap:8,
+              fontSize:12,padding:'5px 10px',borderRadius:8,
+              background:'rgba(255,255,255,0.8)'}}>
+              <span style={{fontSize:10,padding:'1px 7px',borderRadius:20,fontWeight:800,
+                background:'#dcfce7',color:'#065f46',flexShrink:0}}>Done</span>
+              <span style={{fontWeight:700,color:'#1e3a8a'}}>{dt}</span>
+              <span style={{color:'rgba(29,78,216,0.35)',fontSize:10,marginLeft:'auto'}}>
+                {new Date(dt+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'})}
+              </span>
             </div>
-          </Card>
+          ))}
+          {dev.future.map(dt=>(
+            <div key={'f'+dt} style={{display:'flex',alignItems:'center',gap:8,
+              fontSize:12,padding:'5px 10px',borderRadius:8,
+              background:'rgba(219,234,254,0.5)'}}>
+              <span style={{fontSize:10,padding:'1px 7px',borderRadius:20,fontWeight:800,
+                background:'#dbeafe',color:'#1e40af',flexShrink:0}}>Upcoming</span>
+              <span style={{fontWeight:700,color:'#1e3a8a'}}>{dt}</span>
+              <span style={{color:'rgba(29,78,216,0.35)',fontSize:10,marginLeft:'auto'}}>
+                {new Date(dt+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'})}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-          {/* Member bar chart (top 15) */}
-          <Card>
-            <SecTitle>Activity chart — top {Math.min(filteredMembers.length,15)}</SecTitle>
-            {filteredMembers.length === 0
-              ? <div style={{textAlign:'center',padding:'20px 0',color:'rgba(29,78,216,0.3)',fontSize:13}}>No members match the filter</div>
-              : chartReady
-                ? <BarChart
-                    data={filteredMembers.slice(0,15).map(m=>
-                      slotFilter==='morning' ? m.morningCount :
-                      slotFilter==='evening' ? m.eveningCount : m.count)}
-                    labels={filteredMembers.slice(0,15).map(m=>m.name.split(' ')[0])}
-                    color={PURPLE}
-                    height={Math.max(120, filteredMembers.slice(0,15).length * 22)}
-                    horizontal={false}
-                  />
-                : <div style={{height:120,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(29,78,216,0.3)',fontSize:13}}>Loading…</div>
-            }
-          </Card>
-
-          {/* Member list */}
-          <Card>
-            <SecTitle>{filteredMembers.length} devotee{filteredMembers.length!==1?'s':''} {slotFilter!=='all'?`(${slotFilter} only)`:''}</SecTitle>
-            {filteredMembers.length === 0
-              ? <div style={{textAlign:'center',padding:'20px 0',color:'rgba(29,78,216,0.3)',fontSize:13}}>No results</div>
-              : filteredMembers.map((m,i) => {
-                const ci=i%AVATAR_BG.length
-                const total = slotFilter==='morning' ? m.morningCount : slotFilter==='evening' ? m.eveningCount : m.count
-                const maxC = Math.max(...filteredMembers.map(x=>slotFilter==='morning'?x.morningCount:slotFilter==='evening'?x.eveningCount:x.count)) || 1
-                const pct  = Math.round(total/maxC*100)
+// ── Heatmap table ─────────────────────────────────────────────
+function HeatGrid({ devs }) {
+  const months = allMonths(devs)
+  if (!months.length) return <div style={{color:'rgba(29,78,216,0.3)',fontSize:12,padding:12}}>No data</div>
+  return (
+    <div style={{overflowX:'auto'}}>
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:400}}>
+        <thead>
+          <tr>
+            <th style={{textAlign:'left',padding:'6px 10px',color:'rgba(29,78,216,0.5)',
+              fontWeight:800,fontSize:10,textTransform:'uppercase',
+              borderBottom:'1px solid rgba(59,130,246,0.15)',whiteSpace:'nowrap'}}>Devotee</th>
+            {months.map(ym=>(
+              <th key={ym} style={{padding:'6px 4px',color:'rgba(29,78,216,0.5)',fontWeight:800,
+                fontSize:10,textAlign:'center',
+                borderBottom:'1px solid rgba(59,130,246,0.15)',whiteSpace:'nowrap'}}>
+                {monthLabel(ym)}
+              </th>
+            ))}
+            <th style={{padding:'6px 4px',color:'rgba(29,78,216,0.5)',fontWeight:800,
+              fontSize:10,textAlign:'center',
+              borderBottom:'1px solid rgba(59,130,246,0.15)'}}>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {devs.map(d=>(
+            <tr key={d.mobile}>
+              <td style={{padding:'5px 10px',borderBottom:'1px solid rgba(59,130,246,0.07)',
+                whiteSpace:'nowrap'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <Av name={d.name} sz={22}/>
+                  <span style={{fontSize:12,color:'#1e3a8a',fontWeight:600}}>{d.name}</span>
+                </div>
+              </td>
+              {months.map(ym=>{
+                const n = d.monthMap[ym]||0
                 return (
-                  <div key={m.mobile+i} style={{display:'flex',alignItems:'center',gap:10,
-                    padding:'10px 0',borderBottom:i<filteredMembers.length-1?'1px solid rgba(59,130,246,0.07)':'none'}}>
-                    {/* Rank */}
-                    <div style={{width:22,fontSize:11,fontWeight:800,textAlign:'center',flexShrink:0,
-                      color:i<3?'#d97706':'rgba(29,78,216,0.3)'}}>
-                      {i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}
-                    </div>
-                    {/* Avatar */}
-                    <div style={{width:34,height:34,borderRadius:'50%',flexShrink:0,
-                      background:AVATAR_BG[ci],color:AVATAR_TEXT[ci],
+                  <td key={ym} style={{padding:'3px 2px',textAlign:'center',
+                    borderBottom:'1px solid rgba(59,130,246,0.07)'}}>
+                    <div style={{width:26,height:26,borderRadius:5,margin:'0 auto',
+                      background:n>0?SC[d.status]:'rgba(239,246,255,0.5)',
                       display:'flex',alignItems:'center',justifyContent:'center',
-                      fontSize:11,fontWeight:800}}>
-                      {initials(m.name)}
+                      fontSize:10,color:n>0?'#fff':'transparent',fontWeight:800}}>
+                      {n>0?n:''}
                     </div>
-                    {/* Info */}
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontFamily:"'Cinzel',serif",fontWeight:700,color:'#1e3a8a',
-                        fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                        {m.name}
-                      </div>
-                      <div style={{display:'flex',gap:6,marginTop:2,flexWrap:'wrap'}}>
-                        {m.mobile && <span style={{fontSize:10,color:'rgba(29,78,216,0.4)'}}>📱 {m.mobile}</span>}
-                        <span style={{fontSize:10,color:'rgba(29,78,216,0.35)'}}>🗓️ {m.months} month{m.months!==1?'s':''}</span>
-                      </div>
-                      {/* Mini slot bars */}
-                      <div style={{display:'flex',gap:4,marginTop:4,alignItems:'center'}}>
-                        <div style={{height:4,borderRadius:2,background:'#1d4ed8bb',
-                          width:Math.round(m.morningCount/(m.count||1)*80)+'px',minWidth:2,flexShrink:0}}/>
-                        <span style={{fontSize:9,color:'rgba(29,78,216,0.4)'}}>🌅{m.morningCount}</span>
-                        <div style={{height:4,borderRadius:2,background:'#d97706bb',
-                          width:Math.round(m.eveningCount/(m.count||1)*80)+'px',minWidth:2,flexShrink:0}}/>
-                        <span style={{fontSize:9,color:'rgba(217,119,6,0.6)'}}>🌙{m.eveningCount}</span>
-                      </div>
-                    </div>
-                    {/* Bar + count */}
-                    <div style={{width:70,flexShrink:0}}>
-                      <div style={{height:5,borderRadius:3,background:'rgba(109,40,217,0.1)',overflow:'hidden'}}>
-                        <div style={{height:'100%',borderRadius:3,background:AVATAR_BG[ci],
-                          width:pct+'%',transition:'width .4s'}}/>
-                      </div>
-                      <div style={{fontSize:14,fontWeight:900,color:'#1e3a8a',
-                        textAlign:'right',marginTop:3}}>
-                        {total}
-                      </div>
-                    </div>
-                  </div>
+                  </td>
                 )
-              })
-            }
-          </Card>
+              })}
+              <td style={{padding:'5px 4px',textAlign:'center',fontWeight:800,
+                color:'#1e3a8a',fontSize:13,
+                borderBottom:'1px solid rgba(59,130,246,0.07)'}}>{d.total}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
-        </div>
-      )}
+// ══════════════════════════════════════════════════════════════
+//  MAIN EXPORT
+// ══════════════════════════════════════════════════════════════
+export default function DevoteeTracker({ bookings = [] }) {
+  const [search,  setSearch]  = React.useState('')
+  const [filter,  setFilter]  = React.useState('all')
+  const [page,    setPage]    = React.useState('overview')
+  const [sel,     setSel]     = React.useState(null)
+  const [tierOpen,setTierOpen]= React.useState(null)
 
-      {/* ════ TRENDS ════ */}
-      {page==='trends' && (
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+  const ALL = React.useMemo(() => buildDevotees(bookings), [bookings])
+  const dupWarnings = React.useMemo(() => findPossibleDuplicates(ALL), [ALL])
 
-          {/* Slot filter */}
-          <Card style={{padding:'12px 14px'}}>
-            <div style={{fontSize:10,fontWeight:700,color:'rgba(29,78,216,0.45)',
-              textTransform:'uppercase',letterSpacing:'1px',marginBottom:8}}>Filter by slot</div>
-            <div style={{display:'flex',gap:6}}>
-              {[{id:'all',l:'All bookings'},{id:'morning',l:'🌅 Morning'},{id:'evening',l:'🌙 Evening'}].map(f=>(
-                <Pill key={f.id} label={f.l} active={slotFilter===f.id} onClick={()=>setSlotFilter(f.id)} color={PURPLE}/>
-              ))}
+  const devs = React.useMemo(() => {
+    let d = ALL
+    if (search.trim()) d = d.filter(x =>
+      x.name.toLowerCase().includes(search.toLowerCase()) || x.mobile.includes(search))
+    if (filter !== 'all') d = d.filter(x => x.status === filter)
+    return d
+  }, [ALL, search, filter])
+
+  const active   = ALL.filter(d=>d.status==='active').length
+  const atRisk   = ALL.filter(d=>d.status==='at-risk').length
+  const inactive = ALL.filter(d=>d.status==='inactive').length
+  const core     = ALL.filter(d=>d.tier==='core')
+  const regular  = ALL.filter(d=>d.tier==='regular')
+  const oneTime  = ALL.filter(d=>d.tier==='one-time')
+
+  const months     = allMonths(ALL)
+  const mLabels    = months.map(monthLabel)
+  const mCounts    = months.map(ym => {
+    const now = localToday()
+    return bookings.filter(b=>(b.date||'').slice(0,7)===ym && b.date<=now).length
+  })
+
+  const navSt = id => ({
+    flex:'0 0 auto', padding:'8px 12px', border:'none', borderRadius:10, cursor:'pointer',
+    fontFamily:"'Cinzel',serif", fontSize:10, fontWeight:800,
+    whiteSpace:'nowrap', transition:'all .15s',
+    background: page===id ? 'linear-gradient(135deg,#1e3a8a,#3b82f6)' : 'rgba(239,246,255,0.7)',
+    color:      page===id ? '#fff' : 'rgba(29,78,216,0.55)',
+    boxShadow:  page===id ? '0 2px 8px rgba(29,78,216,0.2)' : 'none',
+  })
+
+  // close tier dropdown when clicking elsewhere
+  React.useEffect(() => {
+    const h = () => setTierOpen(null)
+    document.addEventListener('click', h)
+    return () => document.removeEventListener('click', h)
+  }, [])
+
+  if (!bookings.length) return (
+    <div style={{textAlign:'center',padding:'60px 20px',
+      color:'rgba(29,78,216,0.35)',fontSize:13}}>
+      <div style={{fontSize:36,marginBottom:8}}>🪷</div>
+      Loading devotee data…
+    </div>
+  )
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:16}}>
+
+      {/* ── KPI cards ── */}
+      <div style={{display:'flex',flexWrap:'wrap',gap:10}}>
+        {[['Total devotees',ALL.length,'#1d4ed8'],
+          ['Active',active,'#15803d'],
+          ['At risk',atRisk,'#b45309'],
+          ['Inactive',inactive,'#dc2626'],
+          ['Total bookings',bookings.length,'#6d28d9']
+        ].map(([l,v,c])=>(
+          <div key={l} style={{flex:'1 1 100px',background:'rgba(255,255,255,0.82)',
+            borderRadius:14,padding:'14px 16px',
+            border:'1px solid rgba(59,130,246,0.15)'}}>
+            <div style={{fontSize:10,color:'rgba(29,78,216,0.45)',fontWeight:700,
+              textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:6}}>{l}</div>
+            <div style={{fontSize:28,fontWeight:900,color:c,
+              fontFamily:"'Cinzel',serif",lineHeight:1}}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Tier cards — each is position:relative so dropdown stacks correctly ── */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10,
+        overflow:'visible'}}>
+        {[['core','Core (5+)',core],
+          ['regular','Regular (2–4)',regular],
+          ['one-time','One-time',oneTime]
+        ].map(([id,label,list])=>(
+          <TierCard key={id} id={id} label={label} list={list}
+            open={tierOpen===id}
+            onToggle={e=>{e.stopPropagation();setTierOpen(tierOpen===id?null:id)}}
+            onSelect={d=>{setSel(d);setPage('table');setTierOpen(null);window.scrollTo({top:0,behavior:'smooth'})}}
+          />
+        ))}
+      </div>
+
+      {/* ── Possible duplicate devotees (similar names, different mobile numbers) ── */}
+      {dupWarnings.length > 0 && (
+        <div style={{background:'#fee2e2',border:'1.5px solid #fca5a5',borderRadius:14,
+          padding:'14px 16px'}}>
+          <div style={{fontSize:13,fontWeight:800,color:'#991b1b',marginBottom:8}}>
+            🔎 Possible duplicate devotees — check before trusting their status
+          </div>
+          {dupWarnings.map(([a,b],i)=>(
+            <div key={i} style={{fontSize:12,color:'#7f1d1d',marginBottom:6}}>
+              <b>{a.name}</b> ({a.mobile}, {a.status}) looks similar to <b>{b.name}</b> ({b.mobile}, {b.status}).
+              If these are the same person, their combined recent activity may make the "at risk"/"inactive" tag wrong.
             </div>
-          </Card>
-
-          {/* Line chart */}
-          <Card>
-            <SecTitle>Monthly trend {slotFilter!=='all'?`— ${slotFilter} only`:''}</SecTitle>
-            {chartReady && trendData.length > 0
-              ? <LineChart
-                  datasets={[{
-                    data: trendData,
-                    borderColor: slotFilter==='evening'?'#d97706':PURPLE,
-                    backgroundColor: (slotFilter==='evening'?'#d97706':PURPLE)+'18',
-                    fill:true, tension:.4, pointRadius:4,
-                    pointBackgroundColor: slotFilter==='evening'?'#d97706':PURPLE,
-                    borderWidth:2,
-                  }]}
-                  labels={trendLabels}
-                  height={170}
-                />
-              : <div style={{height:170,display:'flex',alignItems:'center',justifyContent:'center',
-                  color:'rgba(29,78,216,0.3)',fontSize:13}}>
-                  {chartReady?'No data':'Loading…'}
-                </div>}
-            {trendData.length > 0 && (() => {
-              const max=Math.max(...trendData); const peakI=trendData.indexOf(max)
-              return <div style={{marginTop:10,fontSize:12,color:'rgba(29,78,216,0.6)',textAlign:'center',fontWeight:600}}>
-                🏆 Peak: <span style={{color:PURPLE,fontWeight:800}}>{trendLabels[peakI]}</span> ({max} bookings)
-              </div>
-            })()}
-          </Card>
-
-          {/* Month breakdown */}
-          <Card>
-            <SecTitle>Month-by-month breakdown</SecTitle>
-            {A.sortedMonths.map((m,i)=>{
-              const d=A.monthMap[m]
-              const val=slotFilter==='morning'?d.morning:slotFilter==='evening'?d.evening:d.all
-              const maxC=Math.max(...trendData)||1
-              const [yr,mm]=m.split('-')
-              return (
-                <div key={m} style={{display:'flex',alignItems:'center',gap:10,
-                  padding:'9px 0',borderBottom:i<A.sortedMonths.length-1?'1px solid rgba(59,130,246,0.07)':'none'}}>
-                  <div style={{width:58,fontSize:11,fontWeight:700,color:'#1e3a8a',
-                    fontFamily:"'Cinzel',serif",flexShrink:0}}>
-                    {MONTH_SHORT[parseInt(mm,10)-1]} {yr}
-                  </div>
-                  <div style={{flex:1,height:7,borderRadius:4,background:'rgba(109,40,217,0.1)',overflow:'hidden'}}>
-                    <div style={{height:'100%',borderRadius:4,background:PURPLE+'99',
-                      width:Math.round(val/maxC*100)+'%',transition:'width .4s'}}/>
-                  </div>
-                  {slotFilter==='all' && (
-                    <div style={{display:'flex',gap:4,flexShrink:0}}>
-                      <span style={{fontSize:10,color:'#1d4ed8',fontWeight:700}}>🌅{d.morning}</span>
-                      <span style={{fontSize:10,color:'#d97706',fontWeight:700}}>🌙{d.evening}</span>
-                    </div>
-                  )}
-                  <div style={{width:24,fontSize:13,fontWeight:900,color:PURPLE,textAlign:'right',flexShrink:0}}>{val}</div>
-                </div>
-              )
-            })}
-          </Card>
-
+          ))}
         </div>
       )}
 
-      {/* ════ UPCOMING ════ */}
-      {page==='upcoming' && (
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      {/* ── Attention strip ── */}
+      <Attention devs={ALL}/>
 
-          {/* Filters */}
-          <Card style={{padding:'12px 14px'}}>
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              <div style={{position:'relative'}}>
-                <input
-                  placeholder="🔍  Search by name…"
-                  value={upSearch}
-                  onChange={e=>setUpSearch(e.target.value)}
-                  style={{width:'100%',padding:'10px 36px 10px 12px',borderRadius:11,
-                    border:'1px solid rgba(59,130,246,0.2)',background:'rgba(239,246,255,0.8)',
-                    fontSize:13,outline:'none',boxSizing:'border-box'}}
-                />
-                {upSearch && (
-                  <button onClick={()=>setUpSearch('')}
-                    style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',
-                      background:'none',border:'none',cursor:'pointer',fontSize:14,color:'rgba(29,78,216,0.4)'}}>✕</button>
-                )}
-              </div>
-              <div style={{display:'flex',gap:6}}>
-                {[{id:'all',l:'All'},{id:'morning',l:'🌅 Morning'},{id:'evening',l:'🌙 Evening'}].map(f=>(
-                  <Pill key={f.id} label={f.l} active={upSlot===f.id} onClick={()=>setUpSlot(f.id)} color={AMBER}/>
+      {/* ── Sub-nav ── */}
+      <div style={{display:'flex',gap:5,background:'rgba(255,255,255,0.6)',
+        borderRadius:12,padding:4,border:'1px solid rgba(59,130,246,0.12)',
+        overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+        {[['overview','📊 Overview'],['charts','📈 Charts'],
+          ['heatmap','🗓️ Heatmap'],['table','🪷 All Devotees']
+        ].map(([id,lbl])=>(
+          <button key={id} style={navSt(id)}
+            onClick={()=>{setPage(id);setSel(null)}}>{lbl}</button>
+        ))}
+      </div>
+
+      {/* ── Search + filter ── */}
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        <input placeholder="🔍 Search name or mobile…"
+          value={search} onChange={e=>setSearch(e.target.value)}
+          style={{flex:'1 1 180px',padding:'9px 12px',borderRadius:10,
+            border:'1px solid rgba(59,130,246,0.2)',
+            background:'rgba(239,246,255,0.8)',fontSize:13,outline:'none'}}/>
+        <select value={filter} onChange={e=>setFilter(e.target.value)}
+          style={{padding:'9px 12px',borderRadius:10,
+            border:'1px solid rgba(59,130,246,0.2)',
+            background:'rgba(239,246,255,0.8)',fontSize:13,cursor:'pointer'}}>
+          <option value="all">All devotees</option>
+          <option value="active">Active (≤30d)</option>
+          <option value="at-risk">At risk (31–90d)</option>
+          <option value="inactive">Inactive (90d+)</option>
+        </select>
+      </div>
+
+      {/* ── Detail drawer ── */}
+      {sel && <Drawer dev={sel} onClose={()=>setSel(null)}/>}
+
+      {/* ── Legend ── */}
+      <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:11,
+        color:'rgba(29,78,216,0.55)'}}>
+        {[['Active ≤30d','#15803d'],['At risk 31–90d','#b45309'],['Inactive 90d+','#dc2626']].map(([l,c])=>(
+          <span key={l} style={{display:'flex',alignItems:'center',gap:5}}>
+            <span style={{width:10,height:10,borderRadius:2,background:c}}/>{l}
+          </span>
+        ))}
+      </div>
+
+      {/* ══ OVERVIEW ══ */}
+      {page==='overview' && (
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:14}}>
+
+            {/* Donut */}
+            <div style={{background:'rgba(255,255,255,0.82)',borderRadius:16,
+              padding:'14px 16px',border:'1px solid rgba(59,130,246,0.15)'}}>
+              <div style={{fontSize:10,fontWeight:800,color:'rgba(29,78,216,0.45)',
+                textTransform:'uppercase',letterSpacing:'1px',marginBottom:10}}>Status breakdown</div>
+              <Chart h={170} watch={[active,atRisk,inactive]} make={()=>({
+                type:'doughnut',
+                data:{labels:['Active','At risk','Inactive'],
+                  datasets:[{data:[active,atRisk,inactive],
+                    backgroundColor:['#15803d','#b45309','#dc2626'],borderWidth:0}]},
+                options:{responsive:true,maintainAspectRatio:false,cutout:'65%',
+                  plugins:{legend:{display:false}}}
+              })}/>
+              <div style={{marginTop:10}}>
+                {[['Active',active,'#15803d'],['At risk',atRisk,'#b45309'],['Inactive',inactive,'#dc2626']].map(([l,v,c])=>(
+                  <div key={l} style={{display:'flex',alignItems:'center',gap:8,
+                    fontSize:13,marginBottom:5}}>
+                    <span style={{width:10,height:10,borderRadius:2,background:c,flexShrink:0}}/>
+                    <span style={{color:'#1e3a8a'}}>{l}</span>
+                    <span style={{marginLeft:'auto',fontWeight:800,color:'#1e3a8a'}}>{v}</span>
+                    <span style={{color:'rgba(29,78,216,0.4)',fontSize:11}}>
+                      {ALL.length?Math.round(v/ALL.length*100):0}%
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
-          </Card>
 
-          {/* List */}
-          <Card>
-            <SecTitle>{filteredUpcoming.length} booking{filteredUpcoming.length!==1?'s':''} · next 30 days</SecTitle>
-            {filteredUpcoming.length===0
-              ? <div style={{textAlign:'center',padding:'24px 0',color:'rgba(29,78,216,0.3)',fontSize:13}}>
-                  No upcoming bookings match your filter 🙏
-                </div>
-              : filteredUpcoming.map((b,i)=>{
-                const d=new Date(b.date+'T00:00:00')
-                const isToday=b.date===today
-                const isMorning=b.time==='Morning'
-                return (
-                  <div key={b.id||i} style={{display:'flex',alignItems:'center',gap:12,
-                    padding:'11px 0',borderBottom:i<filteredUpcoming.length-1?'1px solid rgba(59,130,246,0.08)':'none'}}>
-                    <div style={{
-                      background:isToday?'linear-gradient(135deg,#1d4ed8,#3b82f6)':'rgba(239,246,255,0.9)',
-                      borderRadius:12,padding:'7px 9px',textAlign:'center',minWidth:46,flexShrink:0,
-                      border:isToday?'none':'1px solid rgba(59,130,246,0.15)'}}>
-                      <div style={{fontSize:17,fontWeight:900,lineHeight:1,
-                        color:isToday?'#fff':'#1e3a8a',fontFamily:"'Cinzel',serif"}}>{d.getDate()}</div>
-                      <div style={{fontSize:9,marginTop:2,fontWeight:700,
-                        color:isToday?'rgba(255,255,255,0.8)':'rgba(29,78,216,0.5)'}}>
-                        {MONTH_SHORT[d.getMonth()]}
-                      </div>
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontFamily:"'Cinzel',serif",fontWeight:700,color:'#1e3a8a',
-                        fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.name}</div>
-                      <div style={{fontSize:11,color:'rgba(29,78,216,0.4)',marginTop:1}}>
-                        {DAYS_SHORT[d.getDay()]}{isToday?' · Today':''}
-                        {b.mobile&&<span> · 📱 {b.mobile}</span>}
-                      </div>
-                    </div>
-                    <span style={{fontSize:11,padding:'3px 8px',borderRadius:20,fontWeight:700,flexShrink:0,
-                      background:isMorning?'#dbeafe':'#fef3c7',color:isMorning?'#1d4ed8':'#92400e'}}>
-                      {isMorning?'🌅':'🌙'} {b.time}
-                    </span>
-                  </div>
-                )
-              })
-            }
-          </Card>
+            {/* Monthly line */}
+            <div style={{background:'rgba(255,255,255,0.82)',borderRadius:16,
+              padding:'14px 16px',border:'1px solid rgba(59,130,246,0.15)'}}>
+              <div style={{fontSize:10,fontWeight:800,color:'rgba(29,78,216,0.45)',
+                textTransform:'uppercase',letterSpacing:'1px',marginBottom:10}}>
+                Monthly past bookings
+              </div>
+              <Chart h={170} watch={[mCounts.join(',')]} make={()=>({
+                type:'line',
+                data:{labels:mLabels,datasets:[{data:mCounts,borderColor:'#1d4ed8',
+                  backgroundColor:'rgba(29,78,216,0.08)',borderWidth:2,
+                  tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#1d4ed8'}]},
+                options:{responsive:true,maintainAspectRatio:false,
+                  plugins:{legend:{display:false}},
+                  scales:{x:{ticks:{font:{size:11}},grid:{display:false}},
+                    y:{beginAtZero:true,ticks:{font:{size:11},stepSize:5},
+                      grid:{color:'rgba(0,0,0,0.05)'}}}}
+              })}/>
+            </div>
+          </div>
 
+          {/* Top bar */}
+          <div style={{background:'rgba(255,255,255,0.82)',borderRadius:16,
+            padding:'14px 16px',border:'1px solid rgba(59,130,246,0.15)'}}>
+            <div style={{fontSize:10,fontWeight:800,color:'rgba(29,78,216,0.45)',
+              textTransform:'uppercase',letterSpacing:'1px',marginBottom:10}}>
+              Top devotees by past bookings
+            </div>
+            <Chart
+              h={Math.max(260, Math.min(devs.length,14)*34+60)}
+              watch={[devs.slice(0,14).map(d=>d.total).join(',')]}
+              make={()=>({
+                type:'bar',
+                data:{
+                  labels:devs.slice(0,14).map(d=>d.name.length>16?d.name.slice(0,14)+'…':d.name),
+                  datasets:[{data:devs.slice(0,14).map(d=>d.total),
+                    backgroundColor:devs.slice(0,14).map(d=>SC[d.status]),
+                    borderWidth:0,borderRadius:4}]},
+                options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+                  plugins:{legend:{display:false},
+                    tooltip:{callbacks:{label:c=>` ${c.raw} past bookings`}}},
+                  scales:{x:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},
+                    ticks:{font:{size:11},stepSize:2}},
+                    y:{ticks:{font:{size:11}},grid:{display:false}}}}
+              })}
+            />
+          </div>
         </div>
       )}
 
-      {page==='devotees' && <DevoteeTracker bookings={bookings} />}
+      {/* ══ CHARTS ══ */}
+      {page==='charts' && (
+        <div style={{background:'rgba(255,255,255,0.82)',borderRadius:16,
+          padding:'14px 16px',border:'1px solid rgba(59,130,246,0.15)'}}>
+          <div style={{fontSize:10,fontWeight:800,color:'rgba(29,78,216,0.45)',
+            textTransform:'uppercase',letterSpacing:'1px',marginBottom:10}}>
+            Days since last booking — longer bar = needs follow-up first
+          </div>
+          <Chart
+            h={Math.max(300, devs.length*30+60)}
+            watch={[devs.map(d=>d.ds).join(',')]}
+            make={()=>{
+              const s=[...devs].sort((a,b)=>b.ds-a.ds)
+              return {
+                type:'bar',
+                data:{labels:s.map(d=>d.name.length>14?d.name.slice(0,12)+'…':d.name),
+                  datasets:[{data:s.map(d=>d.ds===9999?0:d.ds),
+                    backgroundColor:s.map(d=>SC[d.status]),borderWidth:0,borderRadius:4}]},
+                options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+                  plugins:{legend:{display:false},
+                    tooltip:{callbacks:{label:c=>` ${c.raw} days since last booking`}}},
+                  scales:{x:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.05)'},
+                    ticks:{font:{size:11}}},
+                    y:{ticks:{font:{size:11}},grid:{display:false}}}}
+              }
+            }}
+          />
+        </div>
+      )}
 
-      {/* Footer */}
-      <div style={{textAlign:'center',padding:'10px 0 6px',
-        color:'rgba(29,78,216,0.2)',fontSize:11,letterSpacing:8}}>✦ ✦ ✦</div>
+      {/* ══ HEATMAP ══ */}
+      {page==='heatmap' && (
+        <div style={{background:'rgba(255,255,255,0.82)',borderRadius:16,
+          padding:'14px 16px',border:'1px solid rgba(59,130,246,0.15)'}}>
+          <div style={{fontSize:10,fontWeight:800,color:'rgba(29,78,216,0.45)',
+            textTransform:'uppercase',letterSpacing:'1px',marginBottom:10}}>
+            Month-by-month past bookings
+          </div>
+          <HeatGrid devs={devs}/>
+        </div>
+      )}
+
+      {/* ══ ALL DEVOTEES ══ */}
+      {page==='table' && (
+        <div style={{background:'rgba(255,255,255,0.82)',borderRadius:16,
+          padding:'14px 16px',border:'1px solid rgba(59,130,246,0.15)'}}>
+          <div style={{fontSize:10,fontWeight:800,color:'rgba(29,78,216,0.45)',
+            textTransform:'uppercase',letterSpacing:'1px',marginBottom:10}}>
+            {devs.length} devotee{devs.length!==1?'s':''} · click a row to see details
+          </div>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+              <thead>
+                <tr>
+                  {['Devotee','Mobile','Past bookings','Upcoming',
+                    'Last booking','Days since','Score','Status'].map(h=>(
+                    <th key={h} style={{textAlign:'left',padding:'8px 10px',fontSize:10,
+                      fontWeight:800,color:'rgba(29,78,216,0.5)',textTransform:'uppercase',
+                      letterSpacing:'0.8px',borderBottom:'1px solid rgba(59,130,246,0.15)',
+                      whiteSpace:'nowrap'}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {devs.map(d=>(
+                  <tr key={d.mobile}
+                    onClick={()=>{setSel(d);window.scrollTo({top:0,behavior:'smooth'})}}
+                    style={{cursor:'pointer'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='rgba(239,246,255,0.6)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    <td style={{padding:'9px 10px',
+                      borderBottom:'1px solid rgba(59,130,246,0.08)'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <Av name={d.name} sz={28}/>
+                        <span style={{fontFamily:"'Cinzel',serif",fontWeight:700,
+                          color:'#1e3a8a',fontSize:12}}>{d.name}</span>
+                      </div>
+                    </td>
+                    <td style={{padding:'9px 10px',color:'rgba(29,78,216,0.45)',fontSize:11,
+                      borderBottom:'1px solid rgba(59,130,246,0.08)'}}>{d.mobile}</td>
+                    <td style={{padding:'9px 10px',fontWeight:900,color:'#1e3a8a',fontSize:14,
+                      borderBottom:'1px solid rgba(59,130,246,0.08)'}}>{d.total}</td>
+                    <td style={{padding:'9px 10px',
+                      borderBottom:'1px solid rgba(59,130,246,0.08)'}}>
+                      {d.futureCount>0
+                        ? <span style={{background:'#dbeafe',color:'#1e40af',
+                            padding:'1px 7px',borderRadius:20,fontWeight:700,fontSize:11}}>
+                            {d.futureCount} upcoming
+                          </span>
+                        : '—'}
+                    </td>
+                    <td style={{padding:'9px 10px',color:'rgba(29,78,216,0.5)',fontSize:11,
+                      borderBottom:'1px solid rgba(59,130,246,0.08)'}}>{d.last||'—'}</td>
+                    <td style={{padding:'9px 10px',fontWeight:800,fontSize:13,
+                      borderBottom:'1px solid rgba(59,130,246,0.08)',
+                      color:d.ds>90?'#dc2626':d.ds>30?'#b45309':'#15803d'}}>
+                      {d.ds===9999?'—':d.ds+'d'}
+                    </td>
+                    <td style={{padding:'9px 10px',
+                      borderBottom:'1px solid rgba(59,130,246,0.08)'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:5}}>
+                        <div style={{flex:1,height:5,borderRadius:3,
+                          background:'rgba(239,246,255,0.9)',overflow:'hidden'}}>
+                          <div style={{height:5,borderRadius:3,
+                            background:SC[d.status],width:d.score+'%'}}/>
+                        </div>
+                        <span style={{fontSize:10,color:'rgba(29,78,216,0.4)',minWidth:22}}>{d.score}</span>
+                      </div>
+                    </td>
+                    <td style={{padding:'9px 10px',
+                      borderBottom:'1px solid rgba(59,130,246,0.08)'}}>
+                      <Badge s={d.status}/>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
     </div>
   )
