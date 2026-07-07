@@ -21,6 +21,8 @@ export function useShareMessages() {
       ? sukLabel(state.ACTIVE_SUK) + (state.ACTIVE_SUK.location ? ', ' + state.ACTIVE_SUK.location : '')
       : 'Satsang Upayojana Kendra'
 
+
+
   // ── Prayer booking share message ──────────────────────────
   const buildShareMsgPlain = (c) => {
     const timeLabel = c.time === 'Morning' ? 'Morning' : 'Evening'
@@ -61,8 +63,18 @@ export function useShareMessages() {
   }
   const buildShareMsg = (c) => encodeURIComponent(buildShareMsgPlain(c))
 
-  // ── Satsang share message ─────────────────────────────────
-  const buildSatsangShareMsgPlain = (c) => {
+  // ============================================================
+  //  Per-event-type share messages — booking share button
+  // ============================================================
+  //  Each event type below is its OWN fully self-contained block.
+  //  Edit any one of them freely without touching the others —
+  //  wording, emojis, line order, whatever — nothing is shared.
+  //  `c` is the booking object (has date, time, venue, mapsLink,
+  //  hostedBy, mobile, occasion, day, etc).
+  // ============================================================
+
+  // ── 🪔 SATSANG ─────────────────────────────────────────────
+  const buildSatsangEventMsg = (c) => {
     const day  = c.day || getDayName(c.date)
     const date = formatDate(c.date)
     return [
@@ -95,6 +107,127 @@ export function useShareMessages() {
       '',
       `🙏 *${sukLabelFull()}* 🙏`,
     ].filter(l => l !== null && l !== undefined).join('\n')
+  }
+
+  // ── 🌸 BHADRA PARIKRAMA SATSANG ────────────────────────────
+  const buildBhadraEventMsg = (c) => {
+    const day  = c.day || getDayName(c.date)
+    const date = formatDate(c.date)
+    return [
+      '🙏 *Hearty Jayguru* 🙏',
+      '',
+      'Respected Dada / Maa,',
+      '',
+      'By the divine grace of',
+      '*Param Premamay Sree Sree Thakur Anukulchandra*,',
+      'we are humbly arranging a *Holy Bhadra Parikrama Satsang* at our residence.',
+      c.occasion ? `\n🪔 *Occasion:* ${c.occasion}` : '',
+      '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '📅 *Date & Time*',
+      `      ${day}, ${date}  |  ${c.time} onwards`,
+      '',
+      '📍 *Venue*',
+      `      ${c.venue}`,
+      c.mapsLink ? `      📌 ${c.mapsLink}` : '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      'We most cordially request your divine presence',
+      'along with your *family and friends*. 🌸',
+      '',
+      'Your presence will make this Bhadra Parikrama Satsang truly blessed. 🪔',
+      '',
+      '*With love & Jayguru,*',
+      `${c.hostedBy || sukLabelFull()}`,
+      c.mobile ? `📱 ${c.mobile}` : '',
+      '',
+      `🙏 *${sukLabelFull()}* 🙏`,
+    ].filter(l => l !== null && l !== undefined).join('\n')
+  }
+
+  // ── 🌺 MATRI-SAMMELAN ──────────────────────────────────────
+  const buildMatriEventMsg = (c) => {
+    const day  = c.day || getDayName(c.date)
+    const date = formatDate(c.date)
+    return [
+      '🙏 *Hearty Jayguru* 🙏',
+      '',
+      'Respected Dada / Maa,',
+      '',
+      'By the divine grace of',
+      '*Param Premamay Sree Sree Thakur Anukulchandra*,',
+      'we are humbly arranging a *Holy Shravan Matrisamellan* at our residence.',
+      c.occasion ? `\n🪔 *Occasion:* ${c.occasion}` : '',
+      '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '📅 *Date & Time*',
+      `      ${day}, ${date}  |  ${c.time} onwards`,
+      '',
+      '📍 *Venue*',
+      `      ${c.venue}`,
+      c.mapsLink ? `      📌 ${c.mapsLink}` : '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      'We most cordially request your divine presence',
+      'along with your *family and friends*. 🌸',
+      '',
+      'Your presence will make this Matrisamellan truly blessed. 🪔',
+      '',
+      '*With love & Jayguru,*',
+      `${c.hostedBy || sukLabelFull()}`,
+      c.mobile ? `📱 ${c.mobile}` : '',
+      '',
+      `🙏 *${sukLabelFull()}* 🙏`,
+    ].filter(l => l !== null && l !== undefined).join('\n')
+  }
+
+  // ── 🌿 SAVAN PARIKRAMA ─────────────────────────────────────
+  const buildSavanEventMsg = (c) => {
+    const day  = c.day || getDayName(c.date)
+    const date = formatDate(c.date)
+    return [
+      '🙏 *Hearty Jayguru* 🙏',
+      '',
+      'Respected Dada / Maa,',
+      '',
+      'By the divine grace of',
+      '*Param Premamay Sree Sree Thakur Anukulchandra*,',
+      'we are humbly arranging a *Holy Shravan Matrisamellan* at our residence.',
+      c.occasion ? `\n🪔 *Occasion:* ${c.occasion}` : '',
+      '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '📅 *Date & Time*',
+      `      ${day}, ${date}  |  ${c.time} onwards`,
+      '',
+      '📍 *Venue*',
+      `      ${c.venue}`,
+      c.mapsLink ? `      📌 ${c.mapsLink}` : '',
+      '━━━━━━━━━━━━━━━━━━━━',
+      '',
+      'We most cordially request your divine presence',
+      'along with your *family and friends*. 🌸',
+      '',
+      'Your presence will make this Savan Parikrama truly blessed. 🪔',
+      '',
+      '*With love & Jayguru,*',
+      `${c.hostedBy || sukLabelFull()}`,
+      c.mobile ? `📱 ${c.mobile}` : '',
+      '',
+      `🙏 *${sukLabelFull()}* 🙏`,
+    ].filter(l => l !== null && l !== undefined).join('\n')
+  }
+
+  // ── Dispatcher — routes to the right block above by `_type` ─
+  // (this is the ONLY place that decides which block runs; the
+  // blocks themselves never need to know about each other)
+  const buildSatsangShareMsgPlain = (c) => {
+    switch (c?._type) {
+      case 'bhadra': return buildBhadraEventMsg(c)
+      case 'matri':  return buildMatriEventMsg(c)
+      case 'savan':  return buildSavanEventMsg(c)
+      case 'satsang':
+      default:       return buildSatsangEventMsg(c)
+    }
   }
   const buildSatsangShareMsg = (c) => encodeURIComponent(buildSatsangShareMsgPlain(c))
 
@@ -177,9 +310,11 @@ export function useShareMessages() {
     // prayer share
     buildShareMsgPlain, buildShareMsg,
     handleCopy,
-    // satsang share
+    // satsang share (dispatcher — picks the right block by booking._type)
     buildSatsangShareMsgPlain, buildSatsangShareMsg,
     handleSatsangCopy,
+    // satsang share — individual per-event-type blocks, edit these directly
+    buildSatsangEventMsg, buildBhadraEventMsg, buildMatriEventMsg, buildSavanEventMsg,
     // message creator
     msgType, setMsgType,
     satsang, setSatsang,
