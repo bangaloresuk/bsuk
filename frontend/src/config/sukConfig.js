@@ -26,7 +26,7 @@ export const SUK_CONFIG = {
     key: 'bannerghatta', name: 'Bannerghatta Satsang Upayojana Kendra',
     shortName: 'Bannerghatta SUK', emoji: '🪷', location: 'Bangalore South',
     scriptUrl: WORKER_URL, apiKey: 'bannerghatta', configured: true,
-    features: { bhadraBooking: true, matriBooking: true, savanBooking: true },
+    features: { bhadraBooking: true, matriBooking: false, savanBooking: true },
   },
   'peenya-2nd-stage': {
     key: 'peenya-2nd-stage', name: 'Peenya 2nd Stage SUK',
