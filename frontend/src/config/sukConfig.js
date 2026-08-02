@@ -38,7 +38,7 @@ export const SUK_CONFIG = {
     key: 'banashankari', name: 'Banashankari SUK',
     shortName: 'Banashankari SUK', emoji: '🪷', location: '',
     scriptUrl: WORKER_URL, apiKey: 'banashankari', configured: true,
-    features: { satsangBooking: false, messages: false },
+    features: { bhadraBooking: true, matriBooking: false, savanBooking: true  },
   },
   'marathahalli': {
     key: 'marathahalli', name: 'Marathahalli SUK',
