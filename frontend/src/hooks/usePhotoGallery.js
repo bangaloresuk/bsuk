@@ -95,6 +95,36 @@ function correctImageOrientation(file) {
   })
 }
 
+// Manually rotates an already-selected file by 90° clockwise per call.
+// Used for the "Rotate" button in the upload preview, as a manual
+// fallback for the rare photo the automatic EXIF fix doesn't catch.
+// Returns { file, preview } — a new File object and a data URL to
+// show in the preview, both already rotated.
+export function rotatePhotoFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.height
+      canvas.height = img.width
+      const ctx = canvas.getContext('2d')
+      ctx.translate(canvas.width / 2, canvas.height / 2)
+      ctx.rotate(Math.PI / 2) // 90° clockwise
+      ctx.drawImage(img, -img.width / 2, -img.height / 2)
+      URL.revokeObjectURL(url)
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('Could not rotate image')); return }
+        const rotatedFile = new File([blob], file.name, { type: 'image/jpeg' })
+        const preview = canvas.toDataURL('image/jpeg', 0.92)
+        resolve({ file: rotatedFile, preview })
+      }, 'image/jpeg', 0.92)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')) }
+    img.src = url
+  })
+}
+
 export function usePhotoGallery({ isConfigured }) {
   const [photos,        setPhotos]        = React.useState([])
   const [photosLoading, setPhotosLoading] = React.useState(false)

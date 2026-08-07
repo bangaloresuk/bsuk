@@ -12,6 +12,7 @@ import React from 'react'
 import state from '../../config/activeSuk.js'
 import { sukLabel } from '../../config/sukConfig.js'
 import { cleanPhotoDate } from '../../utils/utils.js'
+import { rotatePhotoFile } from '../../hooks/usePhotoGallery.js'
 
 export default function GalleryTab({
   isConfigured,
@@ -26,6 +27,21 @@ export default function GalleryTab({
 
   // ── Lightbox state ─────────────────────────────────────────
   const [lightbox, setLightbox] = React.useState(null) // index or null
+  const [rotating, setRotating] = React.useState(false)
+
+  // Manual rotate — for the rare photo the automatic fix doesn't catch.
+  // Rotates the currently-selected (not-yet-uploaded) file 90° clockwise.
+  const handleRotatePreview = async () => {
+    if (!photoUpload.file || rotating) return
+    setRotating(true)
+    try {
+      const { file, preview } = await rotatePhotoFile(photoUpload.file)
+      setPhotoUpload(p => ({ ...p, file, preview }))
+    } catch (e) {
+      setPhotoMsg('⚠️ Could not rotate photo. Please try again.')
+    }
+    setRotating(false)
+  }
 
   const openLightbox  = (i) => setLightbox(i)
   const closeLightbox = ()  => setLightbox(null)
@@ -298,10 +314,25 @@ export default function GalleryTab({
               background: 'rgba(239,246,255,0.5)', cursor: 'pointer', textAlign: 'center',
             }}>
               {photoUpload.preview ? (
-                <img src={photoUpload.preview} alt="preview" style={{
-                  maxWidth: '100%', maxHeight: 200, borderRadius: 10,
-                  objectFit: 'cover', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                }} />
+                <>
+                  <img src={photoUpload.preview} alt="preview" style={{
+                    maxWidth: '100%', maxHeight: 200, borderRadius: 10,
+                    objectFit: 'cover', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  }} />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRotatePreview() }}
+                    disabled={rotating}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '7px 14px', borderRadius: 20, border: '1px solid rgba(59,130,246,0.3)',
+                      background: '#fff', color: '#1e3a8a', fontWeight: 700, fontSize: 12,
+                      cursor: rotating ? 'not-allowed' : 'pointer', opacity: rotating ? 0.6 : 1,
+                    }}>
+                    <span style={{ fontSize: 14 }}>{rotating ? '⏳' : '🔄'}</span>
+                    {rotating ? 'Rotating...' : 'Photo upside down? Rotate'}
+                  </button>
+                </>
               ) : (
                 <>
                   <span style={{ fontSize: 36 }}>🌸</span>
