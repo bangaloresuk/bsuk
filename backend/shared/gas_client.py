@@ -20,6 +20,14 @@ SUK_CONFIG = {
         "url": os.getenv("MARATHAHALLI_GAS_URL", ""),
         "key": os.getenv("MARATHAHALLI_API_KEY", ""),
     },
+    "electronic-city": {
+        "url": os.getenv("ELECTRONIC_CITY_GAS_URL", ""),
+        "key": os.getenv("ELECTRONIC_CITY_API_KEY", ""),
+    },
+    "garvebhavi-palya": {
+        "url": os.getenv("GARVEBHAVI_PALYA_GAS_URL", ""),
+        "key": os.getenv("GARVEBHAVI_PALYA_API_KEY", ""),
+    },
 }
 
 
