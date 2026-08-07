@@ -202,9 +202,11 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
                 cursor:'pointer', fontSize:16, color:'#1e3a8a',
                 display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900 }}>✕</button>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom: currentUser ? 10 : 0 }}>
-              <img src="/lotus-logo.png" alt="" style={{ width:32, height:32 }}/>
+              <img src="/lotus-logo.png" alt="" style={{ width:22, height:22,
+                animation:'floatEmoji 3s ease-in-out infinite alternate' }}/>
               <div style={{ fontFamily:"'Cinzel',serif", color:'#1e3a8a', fontSize:15, fontWeight:800, letterSpacing:1.5, textTransform:'uppercase' }}>All Options</div>
-              <img src="/lotus-logo.png" alt="" style={{ width:32, height:32 }}/>
+              <img src="/lotus-logo.png" alt="" style={{ width:22, height:22,
+                animation:'floatEmoji 3s ease-in-out infinite alternate', animationDelay:'1.5s' }}/>
             </div>
             {currentUser && (
               <div style={{ marginTop:10, padding:'8px 10px', borderRadius:10,
