@@ -1,6 +1,7 @@
-import os, httpx
+import os, time, httpx
 
 REQUEST_TIMEOUT = 30
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "30"))
 
 # Per-SUK config — keys and URLs stored in Render env vars, never in code
 SUK_CONFIG = {
@@ -30,6 +31,9 @@ SUK_CONFIG = {
     },
 }
 
+# Simple in-memory read cache: { (suk_key, sheetName): (timestamp, response) }
+_read_cache: dict = {}
+
 
 def get_suk_config(suk_key: str) -> dict:
     cfg = SUK_CONFIG.get(suk_key)
@@ -42,10 +46,24 @@ async def gas_post(params: dict, suk_key: str) -> dict:
     """
     POST to the correct GAS script for the given SUK.
     Uses the real GAS API key from Render env vars — never from frontend.
+    Reads (action=getAll) are cached in-memory for CACHE_TTL_SECONDS.
+    Any write (add/delete/update/upload) invalidates that sheet's cache entry.
     """
     cfg     = get_suk_config(suk_key)
     gas_url = cfg["url"]
     api_key = cfg["key"]
+
+    action     = params.get("action", "")
+    sheet_name = params.get("sheetName", "Bookings")
+    cache_key  = (suk_key, sheet_name)
+
+    if action == "getAll":
+        cached = _read_cache.get(cache_key)
+        if cached and (time.time() - cached[0]) < CACHE_TTL_SECONDS:
+            return cached[1]
+    else:
+        # Any write invalidates the cached read for this sheet
+        _read_cache.pop(cache_key, None)
 
     body = {**params, "apiKey": api_key}
 
@@ -68,6 +86,11 @@ async def gas_post(params: dict, suk_key: str) -> dict:
         )
         resp.raise_for_status()
         try:
-            return resp.json()
+            result = resp.json()
         except Exception:
-            return {"success": False, "message": "GAS returned non-JSON response"}
+            result = {"success": False, "message": "GAS returned non-JSON response"}
+
+    if action == "getAll" and result.get("success", True):
+        _read_cache[cache_key] = (time.time(), result)
+
+    return result
