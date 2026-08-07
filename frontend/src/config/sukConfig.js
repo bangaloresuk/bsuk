@@ -7,15 +7,22 @@
 
 // In production, silently falling back to localhost is exactly how
 // a deploy without VITE_API_URL set went live pointing at localhost.
-// So: only use the localhost fallback in dev; in a production build
-// missing the env var, fail loudly instead of shipping a broken build.
-const WORKER_URL = import.meta.env.VITE_API_URL
-  || (import.meta.env.DEV ? 'http://localhost:8000' : (() => {
-    throw new Error(
-      'VITE_API_URL is not set for this production build. ' +
-      'Check the VITE_API_URL secret in GitHub Actions.'
-    )
-  })())
+// So: only use the localhost fallback in dev. In a production build
+// missing the env var, log a loud, unmissable console error instead —
+// NOT a thrown error, since throwing here (at module load, before
+// React even mounts) crashes the entire app with a frozen splash
+// screen and no visible explanation. Falling through to '' means API
+// calls will fail as relative-path 404s, which is easy to diagnose
+// in the Network tab, while the rest of the site still loads normally.
+const rawApiUrl = import.meta.env.VITE_API_URL
+if (!rawApiUrl && !import.meta.env.DEV) {
+  console.error(
+    '⚠️ VITE_API_URL is not set for this production build. ' +
+    'All API calls will fail. Check the VITE_API_URL secret in GitHub Actions ' +
+    'and redeploy.'
+  )
+}
+const WORKER_URL = rawApiUrl || (import.meta.env.DEV ? 'http://localhost:8000' : '')
 
 export const DEFAULT_FEATURES = {
   prayerBooking:   true,
