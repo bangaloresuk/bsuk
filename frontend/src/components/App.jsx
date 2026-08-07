@@ -115,6 +115,7 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
     photoUpload, setPhotoUpload,
     photoUploading, photoMsg, setPhotoMsg,
     handleDeletePhoto, handlePhotoUpload,
+    handleRotatePhoto, rotatingPhotoId,
   } = usePhotoGallery({ isConfigured })
 
   // ── Tab / drawer config ───────────────────────────────────
@@ -400,6 +401,8 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
           onUpload={handlePhotoUpload}
           isAdmin={!!currentUser}
           onDeletePhoto={handleDeletePhoto}
+          onRotatePhoto={handleRotatePhoto}
+          rotatingPhotoId={rotatingPhotoId}
         />
       )}
 

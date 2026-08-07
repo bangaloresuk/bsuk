@@ -131,6 +131,7 @@ export function usePhotoGallery({ isConfigured }) {
   const [photoUpload,   setPhotoUpload]   = React.useState({ caption:'', uploader:'', file:null, preview:null })
   const [photoUploading,setPhotoUploading]= React.useState(false)
   const [photoMsg,      setPhotoMsg]      = React.useState('')
+  const [rotatingPhotoId, setRotatingPhotoId] = React.useState(null)
 
   const fetchPhotos = React.useCallback(async () => {
     if (!isConfigured) return
@@ -210,6 +211,42 @@ export function usePhotoGallery({ isConfigured }) {
     }
   }
 
+  // Rotate a photo that's ALREADY in the gallery, 90° clockwise.
+  // There's no "edit in place" API (photos live in an external Google
+  // Apps Script store), so this works by: fetching the current image,
+  // rotating it, uploading the rotated version, then deleting the old
+  // one. Caption/uploader are preserved; the photo will get a new id
+  // and today's upload date, so it may move to the top of the gallery.
+  const handleRotatePhoto = async (photo) => {
+    if (!photo || rotatingPhotoId) return
+    setRotatingPhotoId(photo.id)
+    setPhotoMsg('')
+    try {
+      const res = await fetch(photo.url)
+      const blob = await res.blob()
+      const { preview } = await rotatePhotoFile(blob)
+      const base64 = preview.split(',')[1]
+
+      const uploadRes = await photoApi.upload(
+        base64,
+        photo.filename || 'photo.jpg',
+        photo.caption || '',
+        photo.uploader || 'Anonymous'
+      )
+      if (!uploadRes.success) {
+        setPhotoMsg('⚠️ ' + (uploadRes.message || 'Rotate failed.'))
+        setRotatingPhotoId(null)
+        return
+      }
+      await photoApi.delete(photo.id)
+      setPhotoMsg('✅ Photo rotated.')
+      await fetchPhotos()
+    } catch (e) {
+      setPhotoMsg('⚠️ Could not rotate this photo. Please try again.')
+    }
+    setRotatingPhotoId(null)
+  }
+
   return {
     photos, photosLoading,
     photoUpload, setPhotoUpload,
@@ -218,5 +255,7 @@ export function usePhotoGallery({ isConfigured }) {
     fetchPhotos,
     handleDeletePhoto,
     handlePhotoUpload,
+    handleRotatePhoto,
+    rotatingPhotoId,
   }
 }

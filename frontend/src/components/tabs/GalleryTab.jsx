@@ -23,6 +23,8 @@ export default function GalleryTab({
   onUpload,
   isAdmin,
   onDeletePhoto,
+  onRotatePhoto,
+  rotatingPhotoId,
 }) {
 
   // ── Lightbox state ─────────────────────────────────────────
@@ -247,19 +249,34 @@ export default function GalleryTab({
 
             {/* Delete button inside lightbox — admin only */}
             {isAdmin && (
-              <button
-                onClick={() => {
-                  onDeletePhoto && onDeletePhoto(activeLightboxPhoto.id);
-                  closeLightbox();
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  padding: '10px 24px', borderRadius: 24, border: '1px solid rgba(220,38,38,0.5)',
-                  background: 'rgba(220,38,38,0.15)',
-                  color: '#fca5a5', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                }}>
-                🗑️ Delete Photo
-              </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => onRotatePhoto && onRotatePhoto(activeLightboxPhoto)}
+                  disabled={rotatingPhotoId === activeLightboxPhoto.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '10px 24px', borderRadius: 24, border: '1px solid rgba(59,130,246,0.5)',
+                    background: 'rgba(59,130,246,0.15)',
+                    color: '#93c5fd', fontWeight: 700, fontSize: 13,
+                    cursor: rotatingPhotoId === activeLightboxPhoto.id ? 'not-allowed' : 'pointer',
+                    opacity: rotatingPhotoId === activeLightboxPhoto.id ? 0.6 : 1,
+                  }}>
+                  {rotatingPhotoId === activeLightboxPhoto.id ? '⏳ Rotating...' : '🔄 Rotate Photo'}
+                </button>
+                <button
+                  onClick={() => {
+                    onDeletePhoto && onDeletePhoto(activeLightboxPhoto.id);
+                    closeLightbox();
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '10px 24px', borderRadius: 24, border: '1px solid rgba(220,38,38,0.5)',
+                    background: 'rgba(220,38,38,0.15)',
+                    color: '#fca5a5', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  }}>
+                  🗑️ Delete Photo
+                </button>
+              </div>
             )}
           </div>
 
@@ -485,24 +502,42 @@ export default function GalleryTab({
                   <span style={{ fontSize: 14 }}>💬</span> Share
                 </button>
 
-                {/* Delete button — admin only */}
+                {/* Rotate + Delete buttons — admin only */}
                 {isAdmin && (
-                  <button
-                    onClick={() => onDeletePhoto && onDeletePhoto(p.id)}
-                    style={{
-                      padding: '8px', border: 'none',
-                      borderTop: '1px solid rgba(220,38,38,0.12)',
-                      background: 'rgba(254,242,242,0.7)',
-                      cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      gap: 5, fontSize: 11, fontWeight: 700,
-                      color: '#b91c1c', transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,0.15)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(254,242,242,0.7)'}
-                  >
-                    🗑️ Delete
-                  </button>
+                  <div style={{ display: 'flex' }}>
+                    <button
+                      onClick={() => onRotatePhoto && onRotatePhoto(p)}
+                      disabled={rotatingPhotoId === p.id}
+                      style={{
+                        flex: 1, padding: '8px', border: 'none',
+                        borderTop: '1px solid rgba(59,130,246,0.12)',
+                        borderRight: '1px solid rgba(59,130,246,0.12)',
+                        background: 'rgba(239,246,255,0.7)',
+                        cursor: rotatingPhotoId === p.id ? 'not-allowed' : 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        gap: 5, fontSize: 11, fontWeight: 700,
+                        color: '#1e3a8a', opacity: rotatingPhotoId === p.id ? 0.6 : 1,
+                      }}
+                    >
+                      {rotatingPhotoId === p.id ? '⏳' : '🔄'} {rotatingPhotoId === p.id ? 'Rotating' : 'Rotate'}
+                    </button>
+                    <button
+                      onClick={() => onDeletePhoto && onDeletePhoto(p.id)}
+                      style={{
+                        flex: 1, padding: '8px', border: 'none',
+                        borderTop: '1px solid rgba(220,38,38,0.12)',
+                        background: 'rgba(254,242,242,0.7)',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        gap: 5, fontSize: 11, fontWeight: 700,
+                        color: '#b91c1c', transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,0.15)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(254,242,242,0.7)'}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
