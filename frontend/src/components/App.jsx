@@ -8,7 +8,7 @@ import React from 'react'
 // ── Config & utilities ────────────────────────────────────────
 import state              from '../config/activeSuk.js'
 
-import { DEFAULT_FEATURES, sukLabel } from '../config/sukConfig.js'
+import { DEFAULT_FEATURES, sukLabel, SUK_CONFIG } from '../config/sukConfig.js'
 import { getTodayStr }    from '../utils/utils.js'
 
 // ── Hooks ─────────────────────────────────────────────────────
@@ -213,6 +213,33 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
                 👤 {currentUser.name} · {currentUser.email || currentUser.mobile}
               </div>
             )}
+          </div>
+
+          {/* ── Switch SUK ── uses the existing onChangeSuk('switch', suk)
+              handler already provided by AppShell — no new switching
+              logic added here, just an entry point to what already works. */}
+          <div style={{ padding:'14px 20px 4px' }}>
+            <label style={{ display:'block', fontSize:11, fontWeight:800, color:'#1e3a8a',
+              textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>
+              🪷 Switch Kendra (SUK)
+            </label>
+            <select
+              value={state.ACTIVE_SUK?.key || ''}
+              onChange={(e) => {
+                const next = SUK_CONFIG[e.target.value]
+                if (next && onChangeSuk) {
+                  onChangeSuk('switch', next)
+                  setDrawerOpen(false)
+                }
+              }}
+              style={{ width:'100%', padding:'10px 12px', borderRadius:12,
+                border:'1px solid rgba(59,130,246,0.25)', background:'#fff',
+                color:'#1e3a8a', fontWeight:700, fontSize:13, cursor:'pointer' }}
+            >
+              {Object.values(SUK_CONFIG).filter(s => s.configured).map(s => (
+                <option key={s.key} value={s.key}>{sukLabel(s)}</option>
+              ))}
+            </select>
           </div>
           <div style={{ flex:1, padding:'14px 12px' }}>
             {manageTabs.map(t => (
