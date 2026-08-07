@@ -54,12 +54,20 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
   const [bookMode,          setBookMode]          = React.useState('prayer')
   const [drawerOpen,        setDrawerOpen]        = React.useState(false)
 
-  // Reset bookMode if feature disabled
+  // Reset bookMode to the first genuinely available type if the current
+  // one is disabled for this SUK — including when prayerBooking itself
+  // is disabled, which the old prayer-only-fallback logic never handled.
   React.useEffect(() => {
-    if (!feat.satsangBooking && bookMode === 'satsang') setBookMode('prayer')
-    if (!feat.bhadraBooking  && bookMode === 'bhadra')  setBookMode('prayer')
-    if (!feat.matriBooking   && bookMode === 'matri')   setBookMode('prayer')
-    if (!feat.savanBooking   && bookMode === 'savan')   setBookMode('prayer')
+    const available = [
+      feat.prayerBooking  && 'prayer',
+      feat.satsangBooking && 'satsang',
+      feat.bhadraBooking  && 'bhadra',
+      feat.matriBooking   && 'matri',
+      feat.savanBooking   && 'savan',
+    ].filter(Boolean)
+    if (available.length > 0 && !available.includes(bookMode)) {
+      setBookMode(available[0])
+    }
   }, [feat, bookMode])
 
   // Deep-link (e.g. ?open=gallery)
@@ -274,7 +282,7 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
         {(bookings.length > 0 || satsangBookings.length > 0 || bhadraBookings.length > 0 || matriBookings.length > 0 || savanBookings.length > 0) && (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginTop:10, flexWrap:'wrap' }}>
             {[
-              { count:bookings.length,        filter:'prayer',  emoji:'🌅', color:'rgba(29,78,216,',  label:'Prayer',  show:true },
+              { count:bookings.length,        filter:'prayer',  emoji:'🌅', color:'rgba(29,78,216,',  label:'Prayer',  show:feat.prayerBooking },
               { count:satsangBookings.length, filter:'satsang', emoji:'🪔', color:'rgba(217,119,6,',  label:'Satsang', show:feat.satsangBooking },
               { count:bhadraBookings.length,  filter:'bhadra',  emoji:'🌸', color:'rgba(124,58,237,', label:'Bhadra',  show:feat.bhadraBooking },
               { count:matriBookings.length,   filter:'matri',   emoji:'🌺', color:'rgba(219,39,119,', label:'Matri',   show:feat.matriBooking },

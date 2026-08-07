@@ -60,6 +60,24 @@ export function useBookings({ isConfigured, feat }) {
   const [retrieveTypeFilter, setRetrieveTypeFilter]  = React.useState('prayer')
   const [showRetrievePast,   setShowRetrievePast]    = React.useState(false)
 
+  // Same class of bug as bookMode in App.jsx: retrieveTypeFilter defaults
+  // to 'prayer', which returns zero results forever on any SUK where
+  // prayerBooking is disabled. Reset it to the first genuinely available
+  // type whenever the current filter isn't valid for this SUK's features.
+  React.useEffect(() => {
+    const available = [
+      feat.prayerBooking  && 'prayer',
+      feat.satsangBooking && 'satsang',
+      feat.bhadraBooking  && 'bhadra',
+      feat.matriBooking   && 'matri',
+      feat.savanBooking   && 'savan',
+      'all',
+    ].filter(Boolean)
+    if (available.length > 0 && !available.includes(retrieveTypeFilter)) {
+      setRetrieveTypeFilter(available[0])
+    }
+  }, [feat, retrieveTypeFilter])
+
   // ── Address edit state ────────────────────────────────────
   const [editingAddress, setEditingAddress] = React.useState(null)
   const [editAddressVal, setEditAddressVal] = React.useState('')

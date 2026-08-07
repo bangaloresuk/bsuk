@@ -37,7 +37,7 @@ export default function RetrieveTab({
     .sort((a,b) => (b.date||'').localeCompare(a.date||''))
 
   const TYPE_TABS = [
-    { id:'prayer',  label:'Prayer',  icon:'🙏', color:'#1d4ed8' },
+    feat.prayerBooking  && { id:'prayer',  label:'Prayer',  icon:'🙏', color:'#1d4ed8' },
     feat.satsangBooking && { id:'satsang', label:'Satsang', icon:'🪔', color:'#92400e' },
     feat.bhadraBooking  && { id:'bhadra',  label:'Bhadra',  icon:'🌸', color:'#6d28d9' },
     feat.matriBooking   && { id:'matri',   label:'Matri',   icon:'🌺', color:'#be185d' },
