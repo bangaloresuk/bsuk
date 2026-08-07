@@ -5,7 +5,17 @@
 //  Local dev: set VITE_API_URL in frontend/.env.local
 // ============================================================
 
-const WORKER_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// In production, silently falling back to localhost is exactly how
+// a deploy without VITE_API_URL set went live pointing at localhost.
+// So: only use the localhost fallback in dev; in a production build
+// missing the env var, fail loudly instead of shipping a broken build.
+const WORKER_URL = import.meta.env.VITE_API_URL
+  || (import.meta.env.DEV ? 'http://localhost:8000' : (() => {
+    throw new Error(
+      'VITE_API_URL is not set for this production build. ' +
+      'Check the VITE_API_URL secret in GitHub Actions.'
+    )
+  })())
 
 export const DEFAULT_FEATURES = {
   prayerBooking:   true,
