@@ -36,6 +36,17 @@ function readSavedUser() {
   return null
 }
 
+// ── Fires the splash-hide signal once WelcomeScreen is on screen ──
+// WelcomeScreen has no data to fetch, so it's "ready" as soon as it mounts.
+// (When a SUK IS selected, App.jsx sends this same signal once its data
+// has actually loaded — see App.jsx.)
+function WelcomeScreenReadySignal() {
+  React.useEffect(() => {
+    window.dispatchEvent(new CustomEvent('bsuk:appReady'))
+  }, [])
+  return null
+}
+
 function AppShell() {
   const deepLink = React.useMemo(() => {
     try {
@@ -132,12 +143,15 @@ function AppShell() {
 
   // ── Render order: WelcomeScreen → App (no sign-in gate) ──────
   if (!selectedSuk) return (
-    <WelcomeScreen
-      onSelect={handleSelectSuk}
-      currentUser={currentUser}
-      onSignOut={handleSignOut}
-      onRequestSignIn={handleRequestSignIn}
-    />
+    <>
+      <WelcomeScreenReadySignal />
+      <WelcomeScreen
+        onSelect={handleSelectSuk}
+        currentUser={currentUser}
+        onSignOut={handleSignOut}
+        onRequestSignIn={handleRequestSignIn}
+      />
+    </>
   )
   return (
     <App

@@ -1,0 +1,27 @@
+# Cloudflare Pages reads this file automatically to set response headers.
+# https://developers.cloudflare.com/pages/configuration/headers/
+
+# Vite gives every JS/CSS file a content hash in its filename
+# (e.g. index-D9xSL7ym.js). A new build always produces new filenames,
+# so these can be cached by the browser forever — there is no way for
+# a stale one to ever be served under an old URL.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Fonts loaded from Google Fonts CSS are proxied through our own
+# assets too in some builds — same logic applies to any hashed file
+# at the root.
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+
+# index.html must NEVER be cached — it's the file that references
+# the current build's hashed asset filenames. If this were cached,
+# users could keep loading an old index.html pointing at deleted
+# asset files after a new deploy.
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/
+  Cache-Control: no-cache, must-revalidate

@@ -3,11 +3,42 @@ import ReactDOM from 'react-dom/client'
 import AppShell from './components/AppShell'
 import './styles/global.css'
 
-// ── Splash fade after 2.8s ───────────────────────────────────
-setTimeout(() => {
+// ── Splash: hidden once the app signals real data is ready ──
+// (previously a blind 2.8s timer — this now actually waits for the
+// booking data fetch to succeed, so the splash never disappears onto
+// a half-loaded page). A minimum visible time avoids an ugly flash on
+// fast/cached loads, and a hard fallback timeout guarantees the splash
+// never gets stuck forever even if something unexpected goes wrong.
+const SPLASH_MIN_MS     = 900   // always show splash at least this long
+const SPLASH_FALLBACK_MS = 9000 // hide anyway after this, so it never freezes
+
+const splashStart = Date.now()
+let splashHidden = false
+
+function hideSplash() {
+  if (splashHidden) return
+  splashHidden = true
   const splash = document.getElementById('splash')
   if (splash) splash.classList.add('hidden')
-}, 2800)
+}
+
+function hideSplashRespectingMinimum() {
+  const elapsed = Date.now() - splashStart
+  const remaining = Math.max(0, SPLASH_MIN_MS - elapsed)
+  setTimeout(hideSplash, remaining)
+}
+
+window.addEventListener('bsuk:appReady', hideSplashRespectingMinimum, { once: true })
+
+// Safety net: if the app never signals ready (e.g. stuck on a config the
+// SUK doesn't have configured, or an unexpected error), don't leave the
+// user staring at a frozen splash forever.
+setTimeout(() => {
+  if (!splashHidden) {
+    console.warn('App did not signal ready within', SPLASH_FALLBACK_MS, 'ms — hiding splash anyway.')
+    hideSplash()
+  }
+}, SPLASH_FALLBACK_MS)
 
 // ── Light rays ───────────────────────────────────────────────
 const raysEl = document.getElementById('rays')

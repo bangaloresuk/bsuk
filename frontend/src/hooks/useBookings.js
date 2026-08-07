@@ -16,8 +16,36 @@ export function useBookings({ isConfigured, feat }) {
   // ── Loading flags ─────────────────────────────────────────
   const [bookingsReady,  setBookingsReady]  = React.useState(false)
   const [satsangReady,   setSatsangReady]   = React.useState(false)
+  const [bhadraReady,    setBhadraReady]    = React.useState(false)
+  const [matriReady,     setMatriReady]     = React.useState(false)
+  const [savanReady,     setSavanReady]     = React.useState(false)
 
-  const dataReady = !isConfigured || (bookingsReady && satsangReady)
+  // ── Error flags — true only when a fetch genuinely failed ──
+  // (a successful fetch that returns zero rows is NOT an error)
+  const [bookingsError,  setBookingsError]  = React.useState(false)
+  const [satsangError,   setSatsangError]   = React.useState(false)
+  const [bhadraError,    setBhadraError]    = React.useState(false)
+  const [matriError,     setMatriError]     = React.useState(false)
+  const [savanError,     setSavanError]     = React.useState(false)
+
+  // Only the booking types this SUK actually has enabled gate readiness —
+  // a feature that's off for this SUK is never fetched, so it can't block.
+  const dataReady = !isConfigured || (
+    bookingsReady && satsangReady &&
+    (!feat.bhadraBooking || bhadraReady) &&
+    (!feat.matriBooking  || matriReady)  &&
+    (!feat.savanBooking  || savanReady)
+  )
+
+  // True only once every enabled fetch has actually finished AND at least
+  // one of them failed. Used to show a retry screen instead of silently
+  // letting the app through with missing data.
+  const dataError = isConfigured && dataReady && (
+    bookingsError || satsangError ||
+    (feat.bhadraBooking && bhadraError) ||
+    (feat.matriBooking  && matriError)  ||
+    (feat.savanBooking  && savanError)
+  )
 
   // ── Cancel / share UI state ───────────────────────────────
   const [cancelling,      setCancelling]      = React.useState(null)
@@ -40,54 +68,136 @@ export function useBookings({ isConfigured, feat }) {
   const [addressMsg,     setAddressMsg]     = React.useState({})
 
   // ── Fetchers ──────────────────────────────────────────────
+  // Each one: if a valid (≤5min old) cached response exists, paint it
+  // immediately and mark ready right away — no blocking wait, no blank
+  // loading screen on repeat visits. It then still fetches live in the
+  // background to stay fresh. On a fresh cache miss (first visit, or
+  // cache expired), it behaves exactly as before: full blocking wait,
+  // with the loading overlay up until the real result lands.
   const fetchBookings = React.useCallback(async () => {
     if (!isConfigured) { setBookingsReady(true); return }
-    setBookingsReady(false)
+
+    const cached = api.getCachedInstant()
+    const hadCache = !!(cached && cached.success && Array.isArray(cached.data))
+    if (hadCache) {
+      setBookings(cached.data); setBookingsError(false); setBookingsReady(true)
+    } else {
+      setBookingsReady(false)
+    }
+
     try {
       const d = await api.getAll()
-      if (d.success && Array.isArray(d.data)) setBookings(d.data)
-      else if (Array.isArray(d)) setBookings(d)
-    } catch (e) { console.error('fetchBookings error:', e) }
+      if (d.success && Array.isArray(d.data))     { setBookings(d.data); setBookingsError(false) }
+      else if (Array.isArray(d))                   { setBookings(d);      setBookingsError(false) }
+      else if (!hadCache)                           { setBookingsError(true) }
+      else console.warn('fetchBookings: background refresh malformed, keeping cached data')
+    } catch (e) {
+      console.error('fetchBookings error:', e)
+      if (!hadCache) setBookingsError(true) // only block the page if we had nothing to show at all
+    }
     setBookingsReady(true)
   }, [isConfigured])
 
   const fetchSatsangBookings = React.useCallback(async () => {
     if (!isConfigured) { setSatsangReady(true); return }
-    setSatsangReady(false)
+
+    const cached = satsangApi.getCachedInstant()
+    const hadCache = !!(cached && cached.success && Array.isArray(cached.data))
+    if (hadCache) {
+      setSatsangBookings(cached.data); setSatsangError(false); setSatsangReady(true)
+    } else {
+      setSatsangReady(false)
+    }
+
     try {
       const d = await satsangApi.getAll()
-      if (d.success && Array.isArray(d.data)) setSatsangBookings(d.data)
-      else if (Array.isArray(d)) setSatsangBookings(d)
-    } catch (e) { console.error('fetchSatsang error:', e) }
+      if (d.success && Array.isArray(d.data))     { setSatsangBookings(d.data); setSatsangError(false) }
+      else if (Array.isArray(d))                   { setSatsangBookings(d);      setSatsangError(false) }
+      else if (!hadCache)                           { setSatsangError(true) }
+      else console.warn('fetchSatsang: background refresh malformed, keeping cached data')
+    } catch (e) {
+      console.error('fetchSatsang error:', e)
+      if (!hadCache) setSatsangError(true)
+    }
     setSatsangReady(true)
   }, [isConfigured])
 
   const fetchBhadraBookings = React.useCallback(async () => {
-    if (!isConfigured || !feat.bhadraBooking) return
+    if (!isConfigured || !feat.bhadraBooking) { setBhadraReady(true); return }
+
+    const cached = bhadraApi.getCachedInstant()
+    const hadCache = !!(cached && cached.success && Array.isArray(cached.data))
+    if (hadCache) {
+      setBhadraBookings(cached.data); setBhadraError(false); setBhadraReady(true)
+    } else {
+      setBhadraReady(false)
+    }
+
     try {
       const d = await bhadraApi.getAll()
-      if (d.success && Array.isArray(d.data)) setBhadraBookings(d.data)
-      else if (Array.isArray(d)) setBhadraBookings(d)
-    } catch (e) { console.error('fetchBhadra error:', e) }
+      if (d.success && Array.isArray(d.data))     { setBhadraBookings(d.data); setBhadraError(false) }
+      else if (Array.isArray(d))                   { setBhadraBookings(d);      setBhadraError(false) }
+      else if (!hadCache)                           { setBhadraError(true) }
+      else console.warn('fetchBhadra: background refresh malformed, keeping cached data')
+    } catch (e) {
+      console.error('fetchBhadra error:', e)
+      if (!hadCache) setBhadraError(true)
+    }
+    setBhadraReady(true)
   }, [isConfigured, feat.bhadraBooking])
 
   const fetchMatriBookings = React.useCallback(async () => {
-    if (!isConfigured || !feat.matriBooking) return
+    if (!isConfigured || !feat.matriBooking) { setMatriReady(true); return }
+
+    const cached = matriApi.getCachedInstant()
+    const hadCache = !!(cached && cached.success && Array.isArray(cached.data))
+    if (hadCache) {
+      setMatriBookings(cached.data); setMatriError(false); setMatriReady(true)
+    } else {
+      setMatriReady(false)
+    }
+
     try {
       const d = await matriApi.getAll()
-      if (d.success && Array.isArray(d.data)) setMatriBookings(d.data)
-      else if (Array.isArray(d)) setMatriBookings(d)
-    } catch (e) { console.error('fetchMatri error:', e) }
+      if (d.success && Array.isArray(d.data))     { setMatriBookings(d.data); setMatriError(false) }
+      else if (Array.isArray(d))                   { setMatriBookings(d);      setMatriError(false) }
+      else if (!hadCache)                           { setMatriError(true) }
+      else console.warn('fetchMatri: background refresh malformed, keeping cached data')
+    } catch (e) {
+      console.error('fetchMatri error:', e)
+      if (!hadCache) setMatriError(true)
+    }
+    setMatriReady(true)
   }, [isConfigured, feat.matriBooking])
 
   const fetchSavanBookings = React.useCallback(async () => {
-    if (!isConfigured || !feat.savanBooking) return
+    if (!isConfigured || !feat.savanBooking) { setSavanReady(true); return }
+
+    const cached = savanApi.getCachedInstant()
+    const hadCache = !!(cached && cached.success && Array.isArray(cached.data))
+    if (hadCache) {
+      setSavanBookings(cached.data); setSavanError(false); setSavanReady(true)
+    } else {
+      setSavanReady(false)
+    }
+
     try {
       const d = await savanApi.getAll()
-      if (d.success && Array.isArray(d.data)) setSavanBookings(d.data)
-      else if (Array.isArray(d)) setSavanBookings(d)
-    } catch (e) { console.error('fetchSavan error:', e) }
+      if (d.success && Array.isArray(d.data))     { setSavanBookings(d.data); setSavanError(false) }
+      else if (Array.isArray(d))                   { setSavanBookings(d);      setSavanError(false) }
+      else if (!hadCache)                           { setSavanError(true) }
+      else console.warn('fetchSavan: background refresh malformed, keeping cached data')
+    } catch (e) {
+      console.error('fetchSavan error:', e)
+      if (!hadCache) setSavanError(true)
+    }
+    setSavanReady(true)
   }, [isConfigured, feat.savanBooking])
+
+  // Retry everything from scratch — used by the error/retry screen
+  const retryAllData = React.useCallback(() => {
+    fetchBookings(); fetchSatsangBookings(); fetchBhadraBookings(); fetchMatriBookings(); fetchSavanBookings()
+  }, [fetchBookings, fetchSatsangBookings, fetchBhadraBookings, fetchMatriBookings, fetchSavanBookings])
 
   React.useEffect(() => { fetchBookings() },       [fetchBookings])
   React.useEffect(() => { fetchSatsangBookings() }, [fetchSatsangBookings])
@@ -279,7 +389,7 @@ export function useBookings({ isConfigured, feat }) {
     // data
     bookings, satsangBookings, bhadraBookings, matriBookings, savanBookings,
     // loading
-    dataReady, bookingsReady, satsangReady,
+    dataReady, dataError, bookingsReady, satsangReady, retryAllData,
     // cancel
     cancelling, cancelMobile, setCancelMobile,
     cancelResults, setCancelResults,

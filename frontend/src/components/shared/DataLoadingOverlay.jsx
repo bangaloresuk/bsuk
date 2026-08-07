@@ -101,7 +101,7 @@ function AnimatedLoadingText() {
 }
 
 /** Full-page overlay with lotus spinner and a beautifully styled spiritual quote */
-export function DataLoadingOverlay() {
+export function DataLoadingOverlay({ error = false, onRetry = null }) {
   const quote = React.useMemo(() => getRandomQuote(), [])
   const [visible, setVisible] = React.useState(false)
 
@@ -109,6 +109,45 @@ export function DataLoadingOverlay() {
     const t = setTimeout(() => setVisible(true), 180)
     return () => clearTimeout(t)
   }, [])
+
+  // ── Error state — data fetch genuinely failed, offer a retry ──
+  if (error) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(160deg, #eef4ff 0%, #f5f0ff 50%, #fef9ec 100%)',
+        backdropFilter: 'blur(8px)',
+        animation: 'fadeSlideIn 0.3s ease-out both',
+        padding: '0 24px', textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 46, marginBottom: 14 }}>🪷</div>
+        <div style={{
+          fontFamily: "'Cinzel', serif", fontSize: 17, fontWeight: 800,
+          color: '#78350f', letterSpacing: '0.5px', marginBottom: 10,
+        }}>
+          Couldn't load Kendra data
+        </div>
+        <div style={{
+          fontSize: 13.5, color: 'rgba(120,53,15,0.7)', lineHeight: 1.6,
+          maxWidth: 320, marginBottom: 22,
+        }}>
+          This is usually a temporary connection issue. Please check your internet and try again.
+        </div>
+        <button
+          onClick={onRetry}
+          style={{
+            padding: '11px 28px', borderRadius: 24, border: 'none',
+            background: 'linear-gradient(135deg,#1e3a8a,#4338ca)',
+            color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+            boxShadow: '0 4px 18px rgba(67,56,202,0.35)',
+          }}>
+          🔄 Try Again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{

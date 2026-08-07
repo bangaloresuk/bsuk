@@ -14,6 +14,7 @@ import db from '../db/index.js'
 
 export const api = {
   getAll: ()              => db.bookings.getAll(),
+  getCachedInstant: ()    => db.bookings.getCachedInstant(),
   post:   (data)          => db.bookings.add(data),
   delete: (id)            => db.bookings.cancel(id),
   cancel: (id)            => db.bookings.cancel(id),
@@ -22,6 +23,7 @@ export const api = {
 
 export const satsangApi = {
   getAll: ()     => db.satsang.getAll(),
+  getCachedInstant: () => db.satsang.getCachedInstant(),
   post:   (data) => db.satsang.add(data),
   delete: (id)   => db.satsang.cancel(id),
   cancel: (id)   => db.satsang.cancel(id),  // ← this was missing, App.jsx calls satsangApi.cancel()
@@ -29,6 +31,7 @@ export const satsangApi = {
 
 export const bhadraApi = {
   getAll: ()     => db.bhadra.getAll(),
+  getCachedInstant: () => db.bhadra.getCachedInstant(),
   post:   (data) => db.bhadra.add(data),
   delete: (id)   => db.bhadra.cancel(id),
   cancel: (id)   => db.bhadra.cancel(id),
@@ -36,6 +39,7 @@ export const bhadraApi = {
 
 export const matriApi = {
   getAll: ()     => db.matri.getAll(),
+  getCachedInstant: () => db.matri.getCachedInstant(),
   post:   (data) => db.matri.add(data),
   delete: (id)   => db.matri.cancel(id),
   cancel: (id)   => db.matri.cancel(id),
@@ -43,6 +47,7 @@ export const matriApi = {
 
 export const savanApi = {
   getAll: ()     => db.savan.getAll(),
+  getCachedInstant: () => db.savan.getCachedInstant(),
   post:   (data) => db.savan.add(data),
   delete: (id)   => db.savan.cancel(id),
   cancel: (id)   => db.savan.cancel(id),

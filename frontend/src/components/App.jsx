@@ -73,7 +73,7 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
   // ── Data hooks ────────────────────────────────────────────
   const {
     bookings, satsangBookings, bhadraBookings, matriBookings, savanBookings,
-    dataReady,
+    dataReady, dataError, retryAllData,
     cancelling,
     cancelMobile, setCancelMobile, cancelResults, setCancelResults, cancelMsg, setCancelMsg,
     showCancelPast, setShowCancelPast,
@@ -118,6 +118,16 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
     handleRotatePhoto, rotatingPhotoId,
   } = usePhotoGallery({ isConfigured })
 
+  // Tell the static splash screen (index.html) it's safe to fade out —
+  // only once we're either not configured (nothing to wait for) or the
+  // core booking data has genuinely finished loading without error.
+  // main.jsx listens for this event; it no longer hides on a blind timer.
+  React.useEffect(() => {
+    if (!isConfigured || (dataReady && !dataError)) {
+      window.dispatchEvent(new CustomEvent('bsuk:appReady'))
+    }
+  }, [isConfigured, dataReady, dataError])
+
   // ── Tab / drawer config ───────────────────────────────────
   const tabs = [{ id:'book', label:'🙏 Book' }]
 
@@ -138,8 +148,9 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
   return (
     <div className="content">
 
-      {/* Loading overlay */}
+      {/* Loading / error overlay */}
       {isConfigured && !dataReady && <DataLoadingOverlay />}
+      {isConfigured && dataReady && dataError && <DataLoadingOverlay error onRetry={retryAllData} />}
 
       {/* Confirmation modals */}
       <PrayerConfirmModal
