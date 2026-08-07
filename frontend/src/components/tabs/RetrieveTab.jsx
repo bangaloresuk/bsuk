@@ -229,7 +229,7 @@ function BookingResultCard({ b, cancelling, handleCancelBooking, handleCancelSat
         {isSatsangType ? (
           <>
             <div style={{ fontSize:12, fontWeight:700, color, marginBottom:2 }}>
-              📅 {b.day ? b.day+', ' : ''}{formatDate(b.date)} · ⏰ {cleanTime(b.time)} onwards
+             📅 {getDayName(b.date)}, {formatDate(b.date)} · ⏰ {cleanTime(b.time)} onwards
             </div>
             {b.venue && <div style={{ fontSize:11, color:'#6b7280', marginBottom:2 }}>📍 {b.venue}</div>}
             {b.mapsLink && (
