@@ -23,9 +23,9 @@ function WelcomeScreen({ onSelect, currentUser, onSignOut }) {
     }}>
 
       {/* Lotus */}
-      <span style={{ fontSize:36, display:"inline-block", marginBottom:10,
+      <img src="/lotus-logo.png" alt="Jayguru" style={{ width:56, height:56, display:"inline-block", marginBottom:10,
         filter:"drop-shadow(0 0 18px rgba(255,180,0,0.6))",
-        animation:"floatEmoji 3s ease-in-out infinite alternate" }}>🪷</span>
+        animation:"floatEmoji 3s ease-in-out infinite alternate" }}/>
 
       {/* JAYGURU title */}
       <div style={{ fontFamily:"'Cinzel',serif", fontWeight:900,
