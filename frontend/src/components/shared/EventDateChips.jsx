@@ -18,16 +18,15 @@ export function EventDateChips({ bookings = [], value, onChange, color = '#1d4ed
     const blocked = isBlocked(dateStr)
     chips.push(
       <button key={dateStr} type="button"
-        disabled={blocked}
         title={blocked ? (isBlocked(dateStr)?.reason || 'Bookings closed on this date') : undefined}
-        onClick={() => { if (!blocked) onChange(dateStr) }}
+        onClick={() => onChange(dateStr)}
         style={{
           display:'flex', flexDirection:'column', alignItems:'center',
           padding:'8px 6px', borderRadius:12, flexShrink:0,
-          border:`2px solid ${blocked ? '#d1d5db' : sel ? color : count > 0 ? '#fcd34d' : 'rgba(59,130,246,0.18)'}`,
-          background: blocked ? '#f3f4f6' : sel ? color : count > 0 ? '#fef3c7' : '#f0f9ff',
-          cursor: blocked ? 'not-allowed' : 'pointer', minWidth:54, transition:'all 0.15s',
-          opacity: blocked ? 0.7 : 1,
+          border:`2px solid ${blocked ? (sel ? '#9ca3af' : '#d1d5db') : sel ? color : count > 0 ? '#fcd34d' : 'rgba(59,130,246,0.18)'}`,
+          background: blocked ? (sel ? '#e5e7eb' : '#f3f4f6') : sel ? color : count > 0 ? '#fef3c7' : '#f0f9ff',
+          cursor: 'pointer', minWidth:54, transition:'all 0.15s',
+          opacity: blocked ? 0.8 : 1,
           boxShadow: sel && !blocked ? `0 3px 12px ${color}55` : 'none',
         }}>
         <div style={{ fontSize:9, fontWeight:700, textTransform:'uppercase',

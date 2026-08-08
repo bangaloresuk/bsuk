@@ -173,16 +173,15 @@ function PrayerForm({ form, setForm, error, shake, submitting, isSlotTaken, getS
     const blocked  = getBlockedDateInfo(state.ACTIVE_SUK, dateStr, 'prayer')
     chips.push(
       <button key={dateStr} type="button"
-        disabled={!!blocked}
         title={blocked ? blocked.reason : undefined}
-        onClick={() => { if (!blocked) setForm(f => ({ ...f, date:dateStr, time:'' })) }}
+        onClick={() => setForm(f => ({ ...f, date:dateStr, time:'' }))}
         style={{
           display:'flex', flexDirection:'column', alignItems:'center',
           padding:'8px 6px', borderRadius:12, flexShrink:0,
-          border:`2px solid ${blocked?'#d1d5db':sel?'#1d4ed8':bothTaken?'#fca5a5':mTaken||eTaken?'#fcd34d':'rgba(59,130,246,0.18)'}`,
-          background:blocked?'#f3f4f6':sel?'#1d4ed8':bothTaken?'#fee2e2':mTaken||eTaken?'#fef3c7':'#f0f9ff',
-          cursor:blocked?'not-allowed':'pointer', minWidth:48,
-          opacity:blocked?0.7:bothTaken?0.85:1, transition:'all 0.15s',
+          border:`2px solid ${blocked?(sel?'#9ca3af':'#d1d5db'):sel?'#1d4ed8':bothTaken?'#fca5a5':mTaken||eTaken?'#fcd34d':'rgba(59,130,246,0.18)'}`,
+          background:blocked?(sel?'#e5e7eb':'#f3f4f6'):sel?'#1d4ed8':bothTaken?'#fee2e2':mTaken||eTaken?'#fef3c7':'#f0f9ff',
+          cursor:'pointer', minWidth:48,
+          opacity:blocked?0.8:bothTaken?0.85:1, transition:'all 0.15s',
           boxShadow:sel&&!blocked?'0 3px 12px rgba(29,78,216,0.35)':'none',
         }}>
         <div style={{ fontSize:9, fontWeight:700, textTransform:'uppercase',
