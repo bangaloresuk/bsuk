@@ -5,7 +5,7 @@ import React from 'react'
 import { satsangApi, bhadraApi, matriApi, savanApi } from '../services/api.js'
 import { getDayName, getTodayStr } from '../utils/utils.js'
 import state from '../config/activeSuk.js'
-import { sukLabel } from '../config/sukConfig.js'
+import { sukLabel, getBlockedDateInfo } from '../config/sukConfig.js'
 
 export function useSatsangBooking({ isConfigured, fetchSatsangBookings, fetchBhadraBookings, fetchMatriBookings, fetchSavanBookings, satsangBookings = [], bhadraBookings = [], matriBookings = [], savanBookings = [] }) {
   const EMPTY_FORM = { name:'', mobile:'', venue:'', date:'', time:'', hostedBy:'', mapsLink:'', occasion:'' }
@@ -26,6 +26,11 @@ export function useSatsangBooking({ isConfigured, fetchSatsangBookings, fetchBha
     setTimeout(() => setSatsangShake(false), 600)
   }
 
+  // A date locked for a specific booking type (see sukConfig.js DIAL 1 + DIAL 2).
+  // bookingType is one of 'satsang' | 'bhadra' | 'matri' | 'savan'.
+  const getBlockedInfo = (date, bookingType) => getBlockedDateInfo(state.ACTIVE_SUK, date, bookingType)
+  const isDateBlocked  = (date, bookingType) => !!getBlockedInfo(date, bookingType)
+
   // ── Submit satsang booking ────────────────────────────────
   const handleSatsangSubmit = async () => {
     const { name, mobile, venue, date, time } = satsangForm
@@ -34,6 +39,8 @@ export function useSatsangBooking({ isConfigured, fetchSatsangBookings, fetchBha
     if (!/^[0-9]{10}$/.test(mobile.trim())) { triggerSatsangError('⚠️ Valid 10-digit mobile required.'); return }
     if (!date)          { triggerSatsangError('⚠️ Please select a date.'); return }
     if (date < getTodayStr()) { triggerSatsangError('⚠️ Please select today or a future date.'); return }
+    const blockedInfo = getBlockedInfo(date, 'satsang')
+    if (blockedInfo) { triggerSatsangError(`🚫 Bookings are closed on this date.\n${blockedInfo.reason}\n\nPlease choose a different date.`); return }
     if (!time.trim())   { triggerSatsangError('⚠️ Please enter the time.'); return }
     if (!venue.trim())  { triggerSatsangError('⚠️ Please enter the venue.'); return }
     if (!isConfigured)  { triggerSatsangError('⚠️ Please configure the Satsang Script URL.'); return }
@@ -87,6 +94,8 @@ export function useSatsangBooking({ isConfigured, fetchSatsangBookings, fetchBha
     if (!/^[0-9]{10}$/.test(mobile.trim())) { triggerSatsangError('⚠️ Valid 10-digit mobile required.'); return }
     if (!date)          { triggerSatsangError('⚠️ Please select a date.'); return }
     if (date < getTodayStr()) { triggerSatsangError('⚠️ Please select today or a future date.'); return }
+    const blockedInfo = getBlockedInfo(date, bookMode)
+    if (blockedInfo) { triggerSatsangError(`🚫 Bookings are closed on this date.\n${blockedInfo.reason}\n\nPlease choose a different date.`); return }
     if (!time.trim())   { triggerSatsangError('⚠️ Please enter the time.'); return }
     if (!venue.trim())  { triggerSatsangError('⚠️ Please enter the venue.'); return }
     if (!isConfigured)  { triggerSatsangError('⚠️ Please configure the Script URL.'); return }
@@ -138,6 +147,7 @@ export function useSatsangBooking({ isConfigured, fetchSatsangBookings, fetchBha
     satsangMode, setSatsangMode,
     satsangCalDate, setSatsangCalDate,
     triggerSatsangError,
+    getBlockedInfo, isDateBlocked,
     handleSatsangSubmit,
     handleSpecialSubmit,
   }

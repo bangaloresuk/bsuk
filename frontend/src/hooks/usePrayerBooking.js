@@ -1,11 +1,20 @@
 // ============================================================
 //  usePrayerBooking — prayer form state + submit handler
+//
+//  Prayer booking now goes through the same blocked-dates system
+//  as Satsang/Bhadra/Matri/Savan (see sukConfig.js). Whether a
+//  date is actually blocked for Prayer depends on:
+//    1. GLOBAL_BLOCKED_DATES having `types.prayer: true` for that date
+//    2. This SUK's `blockDatesEnabled.prayer` being true
+//  Both config files default Prayer's toggle to false, so nothing
+//  changes until you opt a SUK in.
 // ============================================================
 import React from 'react'
 import { api } from '../services/api.js'
 import { getPrayerTimes } from '../config/prayerTimes.js'
 import { getDayName, getTodayStr } from '../utils/utils.js'
 import state from '../config/activeSuk.js'
+import { getBlockedDateInfo } from '../config/sukConfig.js'
 
 export function usePrayerBooking({ isConfigured, bookings, fetchBookings }) {
   const [form, setForm] = React.useState({ name:'', mobile:'', place:'', time:'', date:'', mapsLink:'' })
@@ -22,7 +31,18 @@ export function usePrayerBooking({ isConfigured, bookings, fetchBookings }) {
   const isSlotTaken    = (date, time) => bookings.some(b => b.date === date && b.time === time)
   const getSlotBooking = (date, time) => bookings.find(b => b.date === date && b.time === time)
 
+  // A date locked for Prayer specifically (see sukConfig.js DIAL 1 + DIAL 2).
+  const getBlockedInfo = (date) => getBlockedDateInfo(state.ACTIVE_SUK, date, 'prayer')
+  const isDateBlocked  = (date) => !!getBlockedInfo(date)
+
   const handleSlotSelect = (time) => {
+    if (form.date) {
+      const blocked = getBlockedInfo(form.date)
+      if (blocked) {
+        triggerError(`🚫 Bookings are closed on this date.\n${blocked.reason}\n\nPlease choose a different date.`)
+        return
+      }
+    }
     if (form.date && isSlotTaken(form.date, time)) {
       const ex = getSlotBooking(form.date, time)
       triggerError(`🚫 "${time} Prayer" on this date is already booked by ${ex.name}.\n\nPlease choose a different date or slot.`)
@@ -41,6 +61,8 @@ export function usePrayerBooking({ isConfigured, bookings, fetchBookings }) {
     if (!place.trim())  { triggerError('⚠️ Please enter your location name.'); return }
     if (!date)          { triggerError('⚠️ Please select a date.'); return }
     if (date < getTodayStr()) { triggerError('⚠️ You cannot book a past date. Please select today or a future date.'); return }
+    const blockedInfo = getBlockedInfo(date)
+    if (blockedInfo) { triggerError(`🚫 Bookings are closed on this date.\n${blockedInfo.reason}\n\nPlease choose a different date.`); return }
     if (!time)          { triggerError('⚠️ Please select Morning or Evening slot.'); return }
     if (isSlotTaken(date, time)) {
       const ex = getSlotBooking(date, time)
@@ -77,6 +99,7 @@ export function usePrayerBooking({ isConfigured, bookings, fetchBookings }) {
     confirmation, setConfirmation,
     triggerError,
     isSlotTaken, getSlotBooking,
+    getBlockedInfo, isDateBlocked,
     handleSlotSelect, handleBook,
   }
 }

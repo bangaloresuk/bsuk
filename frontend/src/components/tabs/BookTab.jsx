@@ -10,6 +10,8 @@ import { SkeletonCard }    from '../shared/SkeletonCard.jsx'
 import { LocationPicker }  from '../shared/LocationPicker.jsx'
 import { EventDateChips }  from '../shared/EventDateChips.jsx'
 import { bhadraApi, matriApi, savanApi } from '../../services/api.js'
+import { getBlockedDateInfo } from '../../config/sukConfig.js'
+import state from '../../config/activeSuk.js'
 
 export default function BookTab({
   feat, isConfigured, dataReady,
@@ -132,10 +134,29 @@ export default function BookTab({
 }
 
 // ─────────────────────────────────────────────────────────────
+//  BlockedDateBanner — shown the moment a locked date is picked
+//  (shared by Prayer / Satsang / Bhadra / Matri / Savan forms;
+//  whether it actually shows depends on the two toggles in
+//  sukConfig.js — see comments there)
+// ─────────────────────────────────────────────────────────────
+function BlockedDateBanner({ blockedInfo }) {
+  if (!blockedInfo) return null
+  return (
+    <div className="fade-in" style={{ padding:'12px 14px', borderRadius:10,
+      fontSize:13, fontWeight:600, lineHeight:1.5,
+      background:'#f3f4f6', border:'1.5px solid #9ca3af', color:'#374151' }}>
+      🔒 <strong>Bookings are closed on this date.</strong><br/>{blockedInfo.reason}
+      <div style={{ marginTop:4, fontWeight:500, color:'#6b7280' }}>Please choose a different date.</div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
 //  PrayerForm
 // ─────────────────────────────────────────────────────────────
 function PrayerForm({ form, setForm, error, shake, submitting, isSlotTaken, getSlotBooking, handleSlotSelect, handleBook, bookings, prayerTimes, blueText, mutedBlue }) {
   const today = new Date(); today.setHours(0,0,0,0)
+  const blockedInfo = getBlockedDateInfo(state.ACTIVE_SUK, form.date, 'prayer')
 
   // Build prayer date chips (availability-aware)
   const chips = []
@@ -149,30 +170,33 @@ function PrayerForm({ form, setForm, error, shake, submitting, isSlotTaken, getS
     const eTaken   = isSlotTaken(dateStr, 'Evening')
     const bothTaken= mTaken && eTaken
     const sel      = form.date === dateStr
+    const blocked  = getBlockedDateInfo(state.ACTIVE_SUK, dateStr, 'prayer')
     chips.push(
       <button key={dateStr} type="button"
-        onClick={() => { setForm(f => ({ ...f, date:dateStr, time:'' })) }}
+        disabled={!!blocked}
+        title={blocked ? blocked.reason : undefined}
+        onClick={() => { if (!blocked) setForm(f => ({ ...f, date:dateStr, time:'' })) }}
         style={{
           display:'flex', flexDirection:'column', alignItems:'center',
           padding:'8px 6px', borderRadius:12, flexShrink:0,
-          border:`2px solid ${sel?'#1d4ed8':bothTaken?'#fca5a5':mTaken||eTaken?'#fcd34d':'rgba(59,130,246,0.18)'}`,
-          background:sel?'#1d4ed8':bothTaken?'#fee2e2':mTaken||eTaken?'#fef3c7':'#f0f9ff',
-          cursor:'pointer', minWidth:48,
-          opacity:bothTaken?0.85:1, transition:'all 0.15s',
-          boxShadow:sel?'0 3px 12px rgba(29,78,216,0.35)':'none',
+          border:`2px solid ${blocked?'#d1d5db':sel?'#1d4ed8':bothTaken?'#fca5a5':mTaken||eTaken?'#fcd34d':'rgba(59,130,246,0.18)'}`,
+          background:blocked?'#f3f4f6':sel?'#1d4ed8':bothTaken?'#fee2e2':mTaken||eTaken?'#fef3c7':'#f0f9ff',
+          cursor:blocked?'not-allowed':'pointer', minWidth:48,
+          opacity:blocked?0.7:bothTaken?0.85:1, transition:'all 0.15s',
+          boxShadow:sel&&!blocked?'0 3px 12px rgba(29,78,216,0.35)':'none',
         }}>
         <div style={{ fontSize:9, fontWeight:700, textTransform:'uppercase',
-          color:sel?'rgba(255,255,255,0.8)':'#6b7280', letterSpacing:'0.5px' }}>
+          color:blocked?'#9ca3af':sel?'rgba(255,255,255,0.8)':'#6b7280', letterSpacing:'0.5px' }}>
           {i===0?'Today':['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}
         </div>
-        <div style={{ fontSize:16, fontWeight:900, marginTop:2, color:sel?'#fff':'#1e3a8a' }}>{dd}</div>
+        <div style={{ fontSize:16, fontWeight:900, marginTop:2, color:blocked?'#9ca3af':sel?'#fff':'#1e3a8a' }}>{dd}</div>
         <div style={{ fontSize:8, marginTop:3, fontWeight:800,
-          color:sel?'rgba(255,255,255,0.9)':bothTaken?'#dc2626':mTaken||eTaken?'#d97706':'#16a34a' }}>
-          {bothTaken?'FULL':mTaken||eTaken?'1 LEFT':'FREE'}
+          color:blocked?'#6b7280':sel?'rgba(255,255,255,0.9)':bothTaken?'#dc2626':mTaken||eTaken?'#d97706':'#16a34a' }}>
+          {blocked?'🔒 CLOSED':bothTaken?'FULL':mTaken||eTaken?'1 LEFT':'FREE'}
         </div>
         <div style={{ display:'flex', gap:2, marginTop:4 }}>
-          <div style={{ width:5, height:5, borderRadius:'50%', background:mTaken?'#ef4444':'#22c55e' }}/>
-          <div style={{ width:5, height:5, borderRadius:'50%', background:eTaken?'#ef4444':'#22c55e' }}/>
+          <div style={{ width:5, height:5, borderRadius:'50%', background:blocked?'#9ca3af':mTaken?'#ef4444':'#22c55e' }}/>
+          <div style={{ width:5, height:5, borderRadius:'50%', background:blocked?'#9ca3af':eTaken?'#ef4444':'#22c55e' }}/>
         </div>
       </button>
     )
@@ -244,6 +268,7 @@ function PrayerForm({ form, setForm, error, shake, submitting, isSlotTaken, getS
         <div style={{ fontSize:10, color:'rgba(29,78,216,0.4)', marginTop:5, paddingLeft:2 }}>
           ☝️ Tap a chip below for quick pick, or use the calendar for any future date
         </div>
+        {blockedInfo && <div style={{ marginTop:8 }}><BlockedDateBanner blockedInfo={blockedInfo} /></div>}
       </div>
 
       {/* Date chips */}
@@ -345,8 +370,8 @@ function PrayerForm({ form, setForm, error, shake, submitting, isSlotTaken, getS
       )}
 
       <div style={{ marginTop:8 }}>
-        <button className="submit-btn" onClick={handleBook} disabled={submitting}>
-          {submitting ? '⏳ Saving...' : '🙏  Confirm Booking'}
+        <button className="submit-btn" onClick={handleBook} disabled={submitting || !!blockedInfo}>
+          {submitting ? '⏳ Saving...' : blockedInfo ? '🔒 Bookings Closed On This Date' : '🙏  Confirm Booking'}
         </button>
       </div>
     </div>
@@ -360,6 +385,7 @@ function SatsangForm({ satsangForm, setSatsangForm, satsangError, setSatsangErro
   const existingForType = satsangBookings || []
   const isDupSatsang = (date, time) => existingForType.some(b => b.date === date && b.time.trim().toLowerCase() === time.trim().toLowerCase())
   const dupBooker = (date, time) => existingForType.find(b => b.date === date && b.time.trim().toLowerCase() === time.trim().toLowerCase())
+  const blockedInfo = getBlockedDateInfo(state.ACTIVE_SUK, satsangForm.date, 'satsang')
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:13 }}>
@@ -406,13 +432,15 @@ function SatsangForm({ satsangForm, setSatsangForm, satsangError, setSatsangErro
         <div style={{ fontSize:10, color:'rgba(120,53,15,0.45)', marginTop:5, paddingLeft:2 }}>
           ☝️ Tap a chip below for quick pick, or use the calendar above
         </div>
+        {blockedInfo && <div style={{ marginTop:8 }}><BlockedDateBanner blockedInfo={blockedInfo} /></div>}
         <div style={{ marginTop:6 }}>
           <EventDateChips
             bookings={satsangBookings} value={satsangForm.date}
             onChange={d => { setSatsangError(''); setSatsangForm({...satsangForm, date:d}) }}
+            isBlocked={d => getBlockedDateInfo(state.ACTIVE_SUK, d, 'satsang')}
             color="#92400e" idPrefix="satChipScroll" days={14}/>
         </div>
-        {satsangForm.date && existingForType.filter(b => b.date === satsangForm.date).length > 0 && (
+        {!blockedInfo && satsangForm.date && existingForType.filter(b => b.date === satsangForm.date).length > 0 && (
           <div className="fade-in" style={{ marginTop:10, background:'rgba(217,119,6,0.07)',
             border:'1px solid rgba(217,119,6,0.25)', borderRadius:12, padding:'12px 14px' }}>
             <div style={{ fontSize:11, fontWeight:700, color:'#92400e', marginBottom:8 }}>
@@ -478,14 +506,14 @@ function SatsangForm({ satsangForm, setSatsangForm, satsangError, setSatsangErro
 
       <div style={{ marginTop:8 }}>
         <button onClick={handleSatsangSubmit}
-          disabled={satsangSubmitting || (satsangForm.date && satsangForm.time && isDupSatsang(satsangForm.date, satsangForm.time))}
+          disabled={satsangSubmitting || !!blockedInfo || (satsangForm.date && satsangForm.time && isDupSatsang(satsangForm.date, satsangForm.time))}
           style={{ width:'100%', padding:'15px', border:'none', borderRadius:13,
             background:'linear-gradient(135deg,#78350f 0%,#d97706 50%,#fbbf24 100%)',
             color:'#fff', fontWeight:900, fontSize:16, cursor:'pointer',
             fontFamily:"'Cinzel',serif", letterSpacing:'0.5px',
             boxShadow:'0 5px 22px rgba(120,53,15,0.35)',
-            opacity:(satsangSubmitting || (satsangForm.date && satsangForm.time && isDupSatsang(satsangForm.date, satsangForm.time)))?0.6:1, transition:'all 0.3s' }}>
-          {satsangSubmitting ? '⏳ Booking...' : '🪔  Book This Satsang'}
+            opacity:(satsangSubmitting || !!blockedInfo || (satsangForm.date && satsangForm.time && isDupSatsang(satsangForm.date, satsangForm.time)))?0.6:1, transition:'all 0.3s' }}>
+          {satsangSubmitting ? '⏳ Booking...' : blockedInfo ? '🔒 Bookings Closed On This Date' : '🪔  Book This Satsang'}
         </button>
       </div>
     </div>
@@ -498,6 +526,7 @@ function SatsangForm({ satsangForm, setSatsangForm, satsangError, setSatsangErro
 function SpecialEventForm({ bookMode, info: t, satsangForm, setSatsangForm, satsangError, setSatsangError, satsangShake, satsangSubmitting, handleSpecialSubmit }) {
   const existingForType = t.bookings || []
   const isDupSpecial = (date, time) => existingForType.some(b => b.date === date && b.time.trim().toLowerCase() === time.trim().toLowerCase())
+  const blockedInfo = getBlockedDateInfo(state.ACTIVE_SUK, satsangForm.date, bookMode)
   const dupBookerSpecial = (date, time) => existingForType.find(b => b.date === date && b.time.trim().toLowerCase() === time.trim().toLowerCase())
 
   return (
@@ -545,13 +574,15 @@ function SpecialEventForm({ bookMode, info: t, satsangForm, setSatsangForm, sats
         <div style={{ fontSize:10, color:`${t.color}77`, marginTop:5, paddingLeft:2 }}>
           ☝️ Tap a chip below for quick pick, or use the calendar above
         </div>
+        {blockedInfo && <div style={{ marginTop:8 }}><BlockedDateBanner blockedInfo={blockedInfo} /></div>}
         <div style={{ marginTop:6 }}>
           <EventDateChips
             bookings={t.bookings} value={satsangForm.date}
             onChange={d => { setSatsangError(''); setSatsangForm({...satsangForm, date:d}) }}
+            isBlocked={d => getBlockedDateInfo(state.ACTIVE_SUK, d, bookMode)}
             color={t.color} idPrefix={`${bookMode}ChipScroll`} days={14}/>
         </div>
-        {satsangForm.date && existingForType.filter(b => b.date === satsangForm.date).length > 0 && (
+        {!blockedInfo && satsangForm.date && existingForType.filter(b => b.date === satsangForm.date).length > 0 && (
           <div className="fade-in" style={{ marginTop:10, background:t.bg,
             border:`1px solid ${t.border}`, borderRadius:12, padding:'12px 14px' }}>
             <div style={{ fontSize:11, fontWeight:700, color:t.color, marginBottom:8 }}>
@@ -612,13 +643,13 @@ function SpecialEventForm({ bookMode, info: t, satsangForm, setSatsangForm, sats
 
       <div style={{ marginTop:8 }}>
         <button onClick={handleSpecialSubmit}
-          disabled={satsangSubmitting || (satsangForm.date && satsangForm.time && isDupSpecial(satsangForm.date, satsangForm.time))}
+          disabled={satsangSubmitting || !!blockedInfo || (satsangForm.date && satsangForm.time && isDupSpecial(satsangForm.date, satsangForm.time))}
           style={{ width:'100%', padding:'15px', border:'none', borderRadius:13,
             background:t.btnGrad, color:'#fff', fontWeight:900, fontSize:16, cursor:'pointer',
             fontFamily:"'Cinzel',serif", letterSpacing:'0.5px',
             boxShadow:`0 5px 22px ${t.shadow}`,
-            opacity:(satsangSubmitting || (satsangForm.date && satsangForm.time && isDupSpecial(satsangForm.date, satsangForm.time)))?0.6:1, transition:'all 0.3s' }}>
-          {satsangSubmitting ? '⏳ Booking...' : `${t.icon}  Book ${t.label}`}
+            opacity:(satsangSubmitting || !!blockedInfo || (satsangForm.date && satsangForm.time && isDupSpecial(satsangForm.date, satsangForm.time)))?0.6:1, transition:'all 0.3s' }}>
+          {satsangSubmitting ? '⏳ Booking...' : blockedInfo ? '🔒 Bookings Closed On This Date' : `${t.icon}  Book ${t.label}`}
         </button>
       </div>
     </div>

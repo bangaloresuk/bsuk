@@ -38,30 +38,147 @@ export const DEFAULT_FEATURES = {
   photoGallery:    true,
 }
 
+// ============================================================
+//  BLOCKED BOOKING DATES — full control, edit this file only
+//
+//  Two dials, both in this file. A date is actually blocked for
+//  a SUK + booking type ONLY when BOTH say "yes":
+//
+//  DIAL 1 — GLOBAL_BLOCKED_DATES (below): for each date, which
+//    booking types does it apply to? Set true/false per type —
+//    any combination is fine (e.g. block Bhadra + Savan on a
+//    date but leave Prayer + Satsang + Matri open).
+//
+//  DIAL 2 — each SUK's `blockDatesEnabled` (further down, in
+//    SUK_CONFIG): does THIS SUK observe blocked dates at all,
+//    and for which booking types? Also any combination — one
+//    SUK might enforce it only for Bhadra, another for everything.
+//
+//  HOW TO USE:
+//    1. Add a date below with the types it should block.
+//    2. On each SUK you want it to apply to, set that same
+//       type to true in blockDatesEnabled.
+//    3. Redeploy. Both the frontend (instant UI message) and
+//       backend (rejects the API call) enforce it —
+//       just mirror the same two dials in
+//       backend/shared/blocked_dates.py.
+//
+//  Booking type keys used everywhere below: 'prayer', 'satsang',
+//  'bhadra', 'matri', 'savan'.
+// ============================================================
+
+// DIAL 1 — the dates, and which booking types each one blocks.
+// Any type left out / set to false stays open on that date.
+export const GLOBAL_BLOCKED_DATES = [
+  {
+    date: '2026-08-10',
+    reason: '133rd Abirvab Tithi Of Sree Sree Boroma (Central Celebration)',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-08-11',
+    reason: '33rd Tirodhan Tithi Of Sree Sree Borda (Havishyanna)',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-09-02',
+    reason: '81st Deoghar Subha Agaman Divas Of Sree Sree Thakur (Central Celebration)',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-09-16',
+    reason: '139th Abirvab Divas Of Sree Sree Thakur',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-09-20',
+    reason: '139th Abirvab Tithi Of Sree Sree Thakur (Central Celebration)',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-10-21',
+    reason: '94th Abirvab Divas Of Sree Sree Dada',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-10-23',
+    reason: '139th Janma Mohatsav Of Sree Sree Thakur & 345th All India Ritwik Conference',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-10-24',
+    reason: '139th Janma Mohatsav Of Sree Sree Thakur & 345th All India Ritwik Conference',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-11-21',
+    reason: '116th Abirvab Divas Of Sree Sree Borda',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-12-10',
+    reason: '116th Abirvab Tithi Of Sree Sree Borda (Central Celebration)',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2026-12-31',
+    reason: '116th Janma Mohatsav Of Sree Sree Borda & 346th All India Ritwik Conference',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+  {
+    date: '2027-01-01',
+    reason: '116th Janma Mohatsav Of Sree Sree Borda & 346th All India Ritwik Conference',
+    types: { prayer: true, satsang: true, bhadra: true, matri: true, savan: true },
+  },
+]
+
+// A SUK with no `blockDatesEnabled` at all is fully OFF — every type ignores
+// GLOBAL_BLOCKED_DATES for that SUK. This is the shape DIAL 2 uses per SUK.
+const BLOCK_DATES_OFF = { prayer: false, satsang: false, bhadra: false, matri: false, savan: false }
+
+// Returns the blocked-date entry ({ date, reason, types }) if `bookingType`
+// is blocked on `dateStr` for this SUK, or null if it's open. Checks:
+//   1. Does this SUK have the toggle ON for this booking type? (DIAL 2)
+//   2. Does this date block this booking type? (DIAL 1)
+// Both must be true for the date to actually be blocked.
+export function getBlockedDateInfo(suk, dateStr, bookingType) {
+  if (!dateStr || !bookingType) return null
+  const sukToggles = suk?.blockDatesEnabled || BLOCK_DATES_OFF
+  if (!sukToggles[bookingType]) return null
+  const entry = GLOBAL_BLOCKED_DATES.find(b => b.date === dateStr)
+  if (!entry || !entry.types?.[bookingType]) return null
+  return entry
+}
+
 export const SUK_CONFIG = {
   'bannerghatta': {
     key: 'bannerghatta', name: 'Bannerghatta Satsang Upayojana Kendra',
     shortName: 'Bannerghatta SUK', emoji: '🪷', location: 'Bangalore South',
     scriptUrl: WORKER_URL, apiKey: 'bannerghatta', configured: true,
     features: { bhadraBooking: true, matriBooking: false, savanBooking: true },
+    // DIAL 2 — which booking types observe GLOBAL_BLOCKED_DATES for THIS SUK.
+    blockDatesEnabled: { prayer: false, satsang: true, bhadra: true, matri: true, savan: true },
   },
   'peenya-2nd-stage': {
     key: 'peenya-2nd-stage', name: 'Peenya 2nd Stage SUK',
     shortName: 'Peenya 2nd Stage SUK', emoji: '🪷', location: '',
     scriptUrl: WORKER_URL, apiKey: 'peenya-2nd-stage', configured: true,
     features: { satsangBooking: false, messages: false },
+    blockDatesEnabled: { prayer: false, satsang: true, bhadra: true, matri: true, savan: true },
   },
   'banashankari': {
     key: 'banashankari', name: 'Banashankari SUK',
     shortName: 'Banashankari SUK', emoji: '🪷', location: '',
     scriptUrl: WORKER_URL, apiKey: 'banashankari', configured: true,
     features: { bhadraBooking: true, matriBooking: false, savanBooking: true  },
+    blockDatesEnabled: { prayer: false, satsang: true, bhadra: true, matri: true, savan: true },
   },
   'marathahalli': {
     key: 'marathahalli', name: 'Marathahalli SUK',
     shortName: 'Marathahalli SUK', emoji: '🪷', location: 'marathahalli',
     scriptUrl: WORKER_URL, apiKey: 'marathahalli', configured: true,
     features: { satsangBooking: false, messages: false },
+    blockDatesEnabled: { prayer: false, satsang: true, bhadra: true, matri: true, savan: true },
   },
   'electronic-city': {
     key: 'electronic-city', name: 'Electronic City Satsang Upayojana Kendra',
@@ -74,6 +191,7 @@ export const SUK_CONFIG = {
       matriBooking:    false,
       savanBooking:    false,
     },
+    blockDatesEnabled: { prayer: false, satsang: true, bhadra: true, matri: true, savan: true },
   },
   'garvebhavi-palya': {
     key: 'garvebhavi-palya', name: 'Garvebhavi Palya Satsang Upayojana Kendra',
@@ -86,6 +204,7 @@ export const SUK_CONFIG = {
       matriBooking:    false,
       savanBooking:    false,
     },
+    blockDatesEnabled: { prayer: false, satsang: true, bhadra: true, matri: true, savan: true },
   },
   'itpl-main-road':            { key: 'itpl-main-road',            shortName: 'ITPL Main Road SUK',               configured: false, features: {} },
   'sidhappa-layout':           { key: 'sidhappa-layout',           shortName: 'Sidhappa Layout SUK',              configured: false, features: {} },
