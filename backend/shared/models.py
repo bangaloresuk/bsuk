@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field, ConfigDict
 from typing import Any
 import re
 
@@ -16,7 +16,9 @@ def err(message: str) -> dict:
     return ApiResponse(success=False, message=message).model_dump()
 
 class BookingCreate(BaseModel):
-    name: str; mobile: str; place: str; maps_link: str = ""
+    model_config = ConfigDict(populate_by_name=True)
+    name: str; mobile: str; place: str
+    maps_link: str = Field("", alias="mapsLink")
     date: str; time: str; suk_key: str
     @field_validator("mobile")
     @classmethod
@@ -31,8 +33,11 @@ class BookingCreate(BaseModel):
         return v
 
 class SatsangCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     name: str; mobile: str; venue: str; date: str; time: str
-    hosted_by: str = ""; maps_link: str = ""; occasion: str = ""; suk_key: str
+    hosted_by: str = Field("", alias="hostedBy")
+    maps_link: str = Field("", alias="mapsLink")
+    occasion: str = ""; suk_key: str
     @field_validator("mobile")
     @classmethod
     def check_mobile(cls, v):
