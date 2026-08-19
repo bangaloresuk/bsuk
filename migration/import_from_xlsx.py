@@ -37,10 +37,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from openpyxl import load_workbook
 from sqlalchemy import delete
 from backend.shared.db import get_session, init_db, db_configured
-from backend.shared.db_models import Booking, EventBooking
+from backend.shared.db_models import Booking, EventBooking, Photo
 
 EVENT_SHEETS = {"Satsang": "satsang", "Bhadra": "bhadra", "Matri": "matri", "Savan": "savan"}
-ALL_SHEET_NAMES = ["Bookings", "Satsang", "Bhadra", "Matri", "Savan"]
+ALL_SHEET_NAMES = ["Bookings", "Satsang", "Bhadra", "Matri", "Savan", "Photos"]
 
 VALID_SUKS = {
     "bannerghatta", "peenya-2nd-stage", "banashankari",
@@ -125,6 +125,29 @@ async def import_event_sheet(suk_key: str, event_type: str, sheet_name: str, ws,
     return len(rows)
 
 
+async def import_photos_sheet(suk_key: str, ws, dry_run: bool) -> int:
+    rows = read_sheet_rows(ws)
+    print(f"    Photos     → {len(rows)} row(s)" + (" (dry run)" if dry_run else ""))
+    if dry_run or not rows:
+        return len(rows)
+
+    async with get_session() as session:
+        await session.execute(delete(Photo).where(Photo.suk_key == suk_key))
+        for r in rows:
+            # columns: Photo ID, Drive File ID, View URL, Caption, Uploaded By, Uploaded At
+            r = r + [None] * (6 - len(r))
+            drive_file_id = cell_str(r[1])
+            if not drive_file_id:
+                continue  # skip rows with no actual Drive file reference
+            session.add(Photo(
+                suk_key=suk_key,
+                drive_file_id=drive_file_id,
+                caption=cell_str(r[3]),
+                uploader=cell_str(r[4]) or "Anonymous",
+            ))
+    return len(rows)
+
+
 async def main(dir_path: str, dry_run: bool):
     if not dry_run and not db_configured():
         print("❌ DATABASE_URL is not set.")
@@ -161,6 +184,8 @@ async def main(dir_path: str, dry_run: bool):
             ws = wb[sheet_name]
             if sheet_name == "Bookings":
                 suk_total += await import_bookings_sheet(suk_key, ws, dry_run)
+            elif sheet_name == "Photos":
+                suk_total += await import_photos_sheet(suk_key, ws, dry_run)
             else:
                 suk_total += await import_event_sheet(suk_key, EVENT_SHEETS[sheet_name], sheet_name, ws, dry_run)
 

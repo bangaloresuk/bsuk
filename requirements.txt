@@ -11,3 +11,6 @@ python-multipart==0.0.9
 sqlalchemy[asyncio]==2.0.35
 asyncpg==0.29.0
 openpyxl==3.1.5
+
+# Google Drive support (service account)
+google-auth==2.35.0
