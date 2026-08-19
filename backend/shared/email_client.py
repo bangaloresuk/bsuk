@@ -77,13 +77,22 @@ async def send_notification(suk_key: str, subject: str, html_body: str) -> None:
     """Low-level send — prefer send_booking_notification() below unless
     you need fully custom HTML."""
     if not email_configured():
+        print(f"[email] Skipped — GMAIL_ADDRESS/GMAIL_APP_PASSWORD not set.")
         return
     recipients = get_admin_emails(suk_key)
     if not recipients:
+        print(f"[email] Skipped — no ADMIN_EMAILS_{suk_key.upper().replace('-', '_')} configured.")
         return
-    # smtplib is blocking — run it off the event loop so a slow SMTP
-    # connection can never stall the request waiting on it.
-    await asyncio.to_thread(_send_sync, recipients, subject, html_body)
+    try:
+        # smtplib is blocking — run it off the event loop so a slow SMTP
+        # connection can never stall the request waiting on it.
+        await asyncio.to_thread(_send_sync, recipients, subject, html_body)
+        print(f"[email] Sent to {len(recipients)} recipient(s) for {suk_key}: {subject}")
+    except Exception as e:
+        # Logged here so it shows up in Render logs — callers still wrap
+        # this in their own try/except so a failure here never blocks
+        # the booking itself from succeeding.
+        print(f"[email] FAILED for {suk_key}: {type(e).__name__}: {e}")
 
 
 async def send_booking_notification(
