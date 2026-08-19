@@ -14,3 +14,4 @@ openpyxl==3.1.5
 
 # Google Drive support (service account)
 google-auth==2.35.0
+requests==2.32.3
