@@ -9,11 +9,13 @@ from backend.shared.db import get_session, init_db, db_configured
 from backend.shared.db_models import EventBooking
 from backend.shared.auth import validate_suk_key
 from backend.shared.models import SatsangCreate, ok, err
+from backend.shared.email_client import send_booking_notification
 
 app = FastAPI(title="Satsang Service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 EVENT_TYPE = "satsang"
+EVENT_LABEL = "Satsang"
 DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 
 def get_day(d):
@@ -73,7 +75,24 @@ async def create(payload: SatsangCreate):
             session.add(event)
             await session.flush()
             new_id = event.id
-        return {"success": True, "id": str(new_id), "message": f"Satsang booked! ID: {new_id}"}
+
+        try:
+            venue_line = f'<a href="{payload.maps_link}">{payload.maps_link}</a>' if payload.maps_link else payload.venue
+            await send_booking_notification(
+                payload.suk_key,
+                subject=f"Jayguru — New {EVENT_LABEL}: {payload.name} — {payload.date} at {payload.time} [{new_id}]",
+                title=f"New {EVENT_LABEL}",
+                fields=[
+                    ("Event ID", new_id), ("Host", payload.name), ("Mobile", payload.mobile),
+                    ("Date", payload.date), ("Time", payload.time), ("Venue", venue_line),
+                    ("Hosted By", payload.hosted_by or payload.suk_key),
+                    ("Occasion", payload.occasion),
+                ],
+            )
+        except Exception:
+            pass
+
+        return {"success": True, "id": str(new_id), "message": f"{EVENT_LABEL} booked! ID: {new_id}"}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -83,14 +102,40 @@ async def cancel(satsang_id: str, suk_key: str):
     try:
         async with get_session() as session:
             result = await session.execute(
+                select(EventBooking).where(
+                    EventBooking.id == int(satsang_id),
+                    EventBooking.suk_key == suk_key,
+                    EventBooking.event_type == EVENT_TYPE,
+                )
+            )
+            event = result.scalars().first()
+            if event is None:
+                return err("Booking ID not found.")
+            snapshot = (event.name, event.mobile, event.venue, event.maps_link, event.time, event.date)
+            await session.execute(
                 sa_delete(EventBooking).where(
                     EventBooking.id == int(satsang_id),
                     EventBooking.suk_key == suk_key,
                     EventBooking.event_type == EVENT_TYPE,
                 )
             )
-        if result.rowcount == 0:
-            return err("Booking ID not found.")
+
+        name, mobile, venue, maps_link, time, date = snapshot
+        try:
+            venue_line = f'<a href="{maps_link}">{maps_link}</a>' if maps_link else venue
+            await send_booking_notification(
+                suk_key,
+                subject=f"Jayguru — {EVENT_LABEL} Cancelled: {name} — {date} [{satsang_id}]",
+                title=f"{EVENT_LABEL} Cancelled",
+                fields=[
+                    ("Event ID", satsang_id), ("Host", name), ("Mobile", mobile),
+                    ("Date", date), ("Time", time), ("Venue", venue_line),
+                ],
+                cancelled=True,
+            )
+        except Exception:
+            pass
+
         return ok("Cancelled successfully.")
     except ValueError:
         return err("Invalid booking ID.")

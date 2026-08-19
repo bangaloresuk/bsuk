@@ -9,6 +9,7 @@ from backend.shared.db import get_session, init_db, db_configured
 from backend.shared.db_models import Booking
 from backend.shared.auth import validate_suk_key
 from backend.shared.models import BookingCreate, ok, err
+from backend.shared.email_client import send_booking_notification
 
 app = FastAPI(title="Booking Service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -94,6 +95,25 @@ async def create(payload: BookingCreate):
             session.add(booking)
             await session.flush()  # populates booking.id before commit
             new_id = booking.id
+
+        # Fire-and-forget: email is a courtesy, not something that should
+        # ever fail or delay the booking itself confirming successfully.
+        try:
+            place_line = f'<a href="{payload.maps_link}">{payload.maps_link}</a>' if payload.maps_link else payload.place
+            await send_booking_notification(
+                payload.suk_key,
+                subject=f"Jayguru — New Prayer Booking: {payload.name} — {payload.time} on {payload.date} [{new_id}]",
+                title="New Prayer Booking",
+                fields=[
+                    ("Booking ID", new_id), ("Person", payload.name), ("Mobile", payload.mobile),
+                    ("Slot", f"{payload.time} Prayer"), ("Date", payload.date),
+                    ("Prayer Time", get_prayer_time(payload.date, payload.time)),
+                    ("Location", place_line),
+                ],
+            )
+        except Exception:
+            pass
+
         return {"success": True, "id": str(new_id), "message": f"Booking confirmed! ID: {new_id}"}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -104,10 +124,36 @@ async def cancel(booking_id: str, suk_key: str):
     try:
         async with get_session() as session:
             result = await session.execute(
+                select(Booking).where(Booking.id == int(booking_id), Booking.suk_key == suk_key)
+            )
+            booking = result.scalars().first()
+            if booking is None:
+                return err("Booking ID not found.")
+            # Capture details before the row is gone, for the email below.
+            snapshot = (booking.name, booking.mobile, booking.place, booking.maps_link,
+                        booking.time, booking.date)
+            await session.execute(
                 sa_delete(Booking).where(Booking.id == int(booking_id), Booking.suk_key == suk_key)
             )
-        if result.rowcount == 0:
-            return err("Booking ID not found.")
+
+        name, mobile, place, maps_link, time, date = snapshot
+        try:
+            place_line = f'<a href="{maps_link}">{maps_link}</a>' if maps_link else place
+            await send_booking_notification(
+                suk_key,
+                subject=f"Jayguru — Booking Cancelled: {name} — {time} on {date} [{booking_id}]",
+                title="Booking Cancelled",
+                fields=[
+                    ("Booking ID", booking_id), ("Person", name), ("Mobile", mobile),
+                    ("Slot", f"{time} Prayer"), ("Date", date),
+                    ("Prayer Time", get_prayer_time(date, time)),
+                    ("Location", place_line),
+                ],
+                cancelled=True,
+            )
+        except Exception:
+            pass
+
         return ok("Cancelled successfully.")
     except ValueError:
         return err("Invalid booking ID.")
