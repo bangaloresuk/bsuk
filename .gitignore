@@ -1,0 +1,22 @@
+# Never commit real data exports — these contain names, phone numbers,
+# and addresses. The scripts that produce/consume them are fine to keep;
+# only their output is excluded here.
+migration/xlsx_export/
+migration/csv_export/
+*.xlsx
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Env files (secrets should live in Render's dashboard, never in the repo)
+.env
+.env.local

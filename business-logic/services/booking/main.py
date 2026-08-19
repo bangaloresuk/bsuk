@@ -3,14 +3,16 @@ import pathlib; sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.pare
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import date as date_type
-from backend.shared.gas_client import gas_post
+from sqlalchemy import select, delete as sa_delete
+
+from backend.shared.db import get_session, init_db, db_configured
+from backend.shared.db_models import Booking
 from backend.shared.auth import validate_suk_key
 from backend.shared.models import BookingCreate, ok, err
 
 app = FastAPI(title="Booking Service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-SHEET = "Bookings"
 PRAYER_TIMES = {
     1:{"Morning":"06:44","Evening":"18:10"}, 2:{"Morning":"06:40","Evening":"18:23"},
     3:{"Morning":"06:24","Evening":"18:28"}, 4:{"Morning":"06:04","Evening":"18:31"},
@@ -21,7 +23,7 @@ PRAYER_TIMES = {
 }
 DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 
-def get_day(d): 
+def get_day(d):
     try: y,m,dy=d.split("-"); return DAYS[date_type(int(y),int(m),int(dy)).weekday()]
     except: return ""
 
@@ -29,14 +31,37 @@ def get_prayer_time(d, slot):
     try: return PRAYER_TIMES.get(int(d.split("-")[1]),{}).get(slot,"")
     except: return ""
 
+def booking_to_dict(b: Booking) -> dict:
+    # Same field names the old Google-Sheets-backed API returned, so the
+    # frontend needs zero changes. mapsLink is now returned as its own
+    # field (previously it only ever existed jammed into `place` text).
+    return {
+        "id": str(b.id), "date": b.date, "day": b.day, "time": b.time,
+        "name": b.name, "mobile": b.mobile, "place": b.place,
+        "mapsLink": b.maps_link, "prayerTime": get_prayer_time(b.date, b.time),
+        "bookedAt": b.created_at.strftime("%d/%m/%Y, %I:%M:%S %p") if b.created_at else "",
+    }
+
+@app.on_event("startup")
+async def on_startup():
+    if db_configured():
+        await init_db()
+
 @app.get("/health")
 async def health(): return {"status":"ok","service":"booking"}
 
 @app.get("/bookings")
 async def get_all(suk_key: str):
     validate_suk_key(suk_key)
-    try: return await gas_post({"action":"getAll","sheetName":SHEET}, suk_key)
-    except Exception as e: raise HTTPException(status_code=502, detail=str(e))
+    try:
+        async with get_session() as session:
+            result = await session.execute(
+                select(Booking).where(Booking.suk_key == suk_key).order_by(Booking.id)
+            )
+            rows = result.scalars().all()
+        return {"success": True, "data": [booking_to_dict(r) for r in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 @app.post("/bookings")
 async def create(payload: BookingCreate):
@@ -44,23 +69,66 @@ async def create(payload: BookingCreate):
     if payload.date < str(date_type.today()):
         return err("Please select today or a future date.")
     try:
-        return await gas_post({
-            "action":"add","sheetName":SHEET,"name":payload.name.strip(),
-            "mobile":payload.mobile,"place":payload.place.strip(),
-            "mapsLink":payload.maps_link.strip(),"day":get_day(payload.date),
-            "time":payload.time,"date":payload.date,
-            "prayerTime":get_prayer_time(payload.date,payload.time),
-        }, payload.suk_key)
-    except Exception as e: raise HTTPException(status_code=502, detail=str(e))
+        async with get_session() as session:
+            # Same duplicate-slot rule the old Apps Script enforced —
+            # one booking per date+time slot, scoped to this SUK.
+            existing = await session.execute(
+                select(Booking).where(
+                    Booking.suk_key == payload.suk_key,
+                    Booking.date == payload.date,
+                    Booking.time == payload.time,
+                )
+            )
+            if existing.scalars().first() is not None:
+                return err(
+                    f"Slot Already Booked! {payload.time} Prayer on {payload.date} is already reserved.\n"
+                    "Please choose a different date or slot."
+                )
+
+            booking = Booking(
+                suk_key=payload.suk_key,
+                name=payload.name.strip(), mobile=payload.mobile,
+                place=payload.place.strip(), maps_link=payload.maps_link.strip(),
+                date=payload.date, time=payload.time, day=get_day(payload.date),
+            )
+            session.add(booking)
+            await session.flush()  # populates booking.id before commit
+            new_id = booking.id
+        return {"success": True, "id": str(new_id), "message": f"Booking confirmed! ID: {new_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 @app.delete("/bookings/{booking_id}")
 async def cancel(booking_id: str, suk_key: str):
     validate_suk_key(suk_key)
-    try: return await gas_post({"action":"delete","id":booking_id,"sheetName":SHEET}, suk_key)
-    except Exception as e: raise HTTPException(status_code=502, detail=str(e))
+    try:
+        async with get_session() as session:
+            result = await session.execute(
+                sa_delete(Booking).where(Booking.id == int(booking_id), Booking.suk_key == suk_key)
+            )
+        if result.rowcount == 0:
+            return err("Booking ID not found.")
+        return ok("Cancelled successfully.")
+    except ValueError:
+        return err("Invalid booking ID.")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 @app.patch("/bookings/{booking_id}/address")
 async def update_address(booking_id: str, payload: dict, suk_key: str):
     validate_suk_key(suk_key)
-    try: return await gas_post({"action":"updateAddress","id":booking_id,"place":payload.get("place",""),"sheetName":SHEET}, suk_key)
-    except Exception as e: raise HTTPException(status_code=502, detail=str(e))
+    try:
+        async with get_session() as session:
+            result = await session.execute(
+                select(Booking).where(Booking.id == int(booking_id), Booking.suk_key == suk_key)
+            )
+            booking = result.scalars().first()
+            if booking is None:
+                return err("Booking ID not found.")
+            booking.place = payload.get("place", "")
+            booking.maps_link = payload.get("mapsLink", booking.maps_link)
+        return ok("Address updated.")
+    except ValueError:
+        return err("Invalid booking ID.")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
