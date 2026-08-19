@@ -40,12 +40,12 @@ export function useBookings({ isConfigured, feat }) {
   // True only once every enabled fetch has actually finished AND at least
   // one of them failed. Used to show a retry screen instead of silently
   // letting the app through with missing data.
-  const dataError = isConfigured && dataReady && (
-    bookingsError || satsangError ||
-    (feat.bhadraBooking && bhadraError) ||
-    (feat.matriBooking  && matriError)  ||
-    (feat.savanBooking  && savanError)
-  )
+  const dataError = isConfigured && dataReady && bookingsError
+  // NOTE: intentionally does NOT include satsangError/bhadraError/matriError/
+  // savanError. A hiccup in one of those optional event types should never
+  // lock everyone out of the whole app — it should only affect that type's
+  // own tab (which already gets its own `*Error` flag to show inline if
+  // needed). Only the core prayer-booking data blocks the full-page screen.
 
   // ── Cancel / share UI state ───────────────────────────────
   const [cancelling,      setCancelling]      = React.useState(null)
