@@ -11,15 +11,10 @@ folder though: that folder id comes from a per-SUK env var
 does per-SUK lookups for GAS_URL/API_KEY.
 """
 import os
-import json
-import base64
-import asyncio
 import time
 import httpx
-from google.oauth2 import service_account
-from google.auth.transport.requests import Request as GoogleAuthRequest
+from backend.shared.google_auth import get_access_token, google_configured
 
-DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
 
@@ -55,40 +50,11 @@ def guess_mime_type(filename: str) -> str:
     return MIME_TYPES.get(ext, "image/jpeg")
 
 
-# ── Credential loading & token caching ──────────────────────────
-# A single set of credentials is shared across all SUKs (the service
-# account itself is one identity; folder-level access is what's scoped
-# per-SUK, via each folder's individual Drive "share" permission).
-_credentials = None
-_creds_lock = asyncio.Lock()
-
-
-def _load_credentials():
-    b64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_B64", "")
-    if not b64:
-        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 is not set — check Render env vars.")
-    try:
-        info = json.loads(base64.b64decode(b64))
-    except Exception as e:
-        raise RuntimeError(f"GOOGLE_SERVICE_ACCOUNT_JSON_B64 is not valid base64-encoded JSON: {e}")
-    return service_account.Credentials.from_service_account_info(info, scopes=DRIVE_SCOPES)
-
-
-async def _get_access_token() -> str:
-    """Returns a valid access token, refreshing (in a background thread,
-    since google-auth's refresh call is blocking/synchronous) only when
-    the cached one is missing or expired."""
-    global _credentials
-    async with _creds_lock:
-        if _credentials is None:
-            _credentials = await asyncio.to_thread(_load_credentials)
-        if not _credentials.valid:
-            await asyncio.to_thread(_credentials.refresh, GoogleAuthRequest())
-    return _credentials.token
-
-
+# ── Credential handling now lives in google_auth.py (shared with
+# sheets_client.py) — drive_configured() kept here as an alias so
+# gallery/main.py doesn't need to change its import.
 def drive_configured() -> bool:
-    return bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_B64"))
+    return google_configured()
 
 
 # ── Public API used by gallery/main.py ──────────────────────────
@@ -97,7 +63,7 @@ async def upload_photo(suk_key: str, file_bytes: bytes, filename: str) -> dict:
     """Uploads a photo into this SUK's Drive folder, makes it link-viewable
     (matching the old Apps Script behaviour), and returns {file_id, url}."""
     folder_id = get_folder_id(suk_key)
-    token = await _get_access_token()
+    token = await get_access_token()
     mime_type = guess_mime_type(filename)
     drive_filename = f"BSUK_{int(time.time() * 1000)}_{filename}"
 
@@ -140,7 +106,7 @@ async def delete_photo(file_id: str) -> None:
     """Soft-deletes (trashes) a Drive file — matches the old Apps Script's
     setTrashed(true), so accidental deletes are still recoverable from
     Drive's trash for a while, not gone instantly."""
-    token = await _get_access_token()
+    token = await get_access_token()
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.patch(
             f"{DRIVE_FILES_URL}/{file_id}",
