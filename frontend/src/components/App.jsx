@@ -70,10 +70,29 @@ export default function App({ onChangeSuk, deepLink = {}, currentUser = null, on
     }
   }, [feat, bookMode])
 
-  // Deep-link (e.g. ?open=gallery)
+  // Deep-link (e.g. ?open=gallery, ?open=bhadra, ?open=all&type=bhadra)
   React.useEffect(() => {
     if (deepLink.open === 'gallery') {
       setActiveTab('manage'); setManageTab('gallery')
+      try { window.history.replaceState({}, '', window.location.pathname) } catch(e) {}
+      return
+    }
+    // "All Bookings" tracker link — lets someone who's having trouble
+    // navigating the app just be sent a link straight to the list,
+    // optionally pre-filtered to one event type (e.g. ?type=bhadra).
+    if (deepLink.open === 'all') {
+      setActiveTab('manage'); setManageTab('all')
+      if (['prayer','satsang','bhadra','matri','savan'].includes(deepLink.type)) {
+        setAllBookingsFilter(deepLink.type)
+      }
+      try { window.history.replaceState({}, '', window.location.pathname) } catch(e) {}
+      return
+    }
+    // Event-type invite links (from the "book your own slot" line added
+    // to shared invite messages) jump straight to the Book tab with the
+    // right event type pre-selected, instead of the default prayer form.
+    if (['satsang', 'bhadra', 'matri', 'savan'].includes(deepLink.open)) {
+      setActiveTab('book'); setBookMode(deepLink.open)
       try { window.history.replaceState({}, '', window.location.pathname) } catch(e) {}
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

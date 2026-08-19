@@ -51,7 +51,7 @@ function AppShell() {
   const deepLink = React.useMemo(() => {
     try {
       const p = new URLSearchParams(window.location.search)
-      return { suk: p.get('suk'), open: p.get('open') }
+      return { suk: p.get('suk'), open: p.get('open'), type: p.get('type') }
     } catch (e) { return {} }
   }, [])
 

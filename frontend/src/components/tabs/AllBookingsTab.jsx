@@ -4,6 +4,7 @@
 import React from 'react'
 import { SLOT_STYLE } from '../../config/prayerTimes.js'
 import { getTodayStr, formatDateWithDay, cleanTime } from '../../utils/utils.js'
+import state from '../../config/activeSuk.js'
 
 const TC = {
   satsang: { border:'rgba(217,119,6,0.2)',  bg:'rgba(255,251,235,0.75)', bar:'linear-gradient(90deg,#d97706,#fbbf2455)', name:'#78350f', time:'#d97706', badge:'#92400e', badgeBg:'rgba(217,119,6,0.1)',  adminBg:'rgba(217,119,6,0.07)',  adminBorder:'rgba(217,119,6,0.18)',  adminText:'#92400e', label:'🪔 Satsang',  cancelGrad:'linear-gradient(135deg,#92400e,#d97706)', cancelLabel:'Cancel Satsang' },
@@ -30,6 +31,29 @@ export default function AllBookingsTab({
   const [dateFrom,  setDateFrom]  = React.useState('')
   const [dateTo,    setDateTo]    = React.useState('')
   const [showRange, setShowRange] = React.useState(false)
+  const [linkCopied, setLinkCopied] = React.useState(false)
+
+  // Shareable link straight to this list, pre-filtered to whichever type
+  // tab is currently selected — same ?suk=...&open=... pattern the
+  // Gallery share feature and event invite links already use. Handy to
+  // send someone who's having trouble navigating the app themselves.
+  const trackerUrl = React.useMemo(() => {
+    try {
+      const base   = window.location.origin + window.location.pathname
+      const sukKey = state.ACTIVE_SUK ? state.ACTIVE_SUK.key : ''
+      const params = new URLSearchParams({ suk: sukKey, open: 'all' })
+      if (typeTab && typeTab !== 'all') params.set('type', typeTab)
+      return `${base}?${params.toString()}`
+    } catch (e) { return '' }
+  }, [typeTab])
+
+  const handleCopyTrackerLink = async () => {
+    try {
+      await navigator.clipboard.writeText(trackerUrl)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch (e) { /* clipboard access denied — silently ignore */ }
+  }
 
   React.useEffect(() => {
     if (allBookingsFilter && allBookingsFilter !== 'all') {
@@ -202,6 +226,17 @@ export default function AllBookingsTab({
             )
           })}
         </div>
+
+        {/* Copy a shareable link straight to this filtered view */}
+        <button onClick={handleCopyTrackerLink}
+          style={{ width:'100%', padding:'8px 12px', borderRadius:10, marginBottom:10,
+            background: linkCopied ? 'rgba(21,128,61,0.12)' : 'rgba(29,78,216,0.08)',
+            border: `1px solid ${linkCopied ? 'rgba(21,128,61,0.3)' : 'rgba(59,130,246,0.2)'}`,
+            cursor:'pointer', fontSize:12, fontWeight:700,
+            color: linkCopied ? '#15803d' : 'rgba(29,78,216,0.7)',
+            display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+          {linkCopied ? '✓ Link copied!' : `🔗 Copy link to this view${typeTab !== 'all' ? ` (${typeTab})` : ''}`}
+        </button>
 
         {/* Date range filter */}
         <div style={{ marginBottom:10 }}>
