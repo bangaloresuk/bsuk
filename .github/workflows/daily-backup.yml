@@ -1,0 +1,38 @@
+name: Daily Sheets Backup
+
+# Runs the Postgres → Google Sheets backup once a day, automatically.
+# Also runnable manually anytime from the Actions tab (workflow_dispatch),
+# handy for testing without waiting for the scheduled time.
+on:
+  schedule:
+    # 21:00 UTC = 2:30 AM IST — a quiet time, unlikely to overlap with
+    # anyone actively using the app. Cron syntax: minute hour day month weekday.
+    - cron: '0 21 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
+          BANNERGHATTA_SPREADSHEET_ID: ${{ secrets.BANNERGHATTA_SPREADSHEET_ID }}
+          BANASHANKARI_SPREADSHEET_ID: ${{ secrets.BANASHANKARI_SPREADSHEET_ID }}
+          ELECTRONIC_CITY_SPREADSHEET_ID: ${{ secrets.ELECTRONIC_CITY_SPREADSHEET_ID }}
+          GARVEBHAVI_PALYA_SPREADSHEET_ID: ${{ secrets.GARVEBHAVI_PALYA_SPREADSHEET_ID }}
+          MARATHAHALLI_SPREADSHEET_ID: ${{ secrets.MARATHAHALLI_SPREADSHEET_ID }}
+          PEENYA_SPREADSHEET_ID: ${{ secrets.PEENYA_SPREADSHEET_ID }}
+        run: python backup/run_backup.py
