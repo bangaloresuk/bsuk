@@ -94,7 +94,7 @@ async def backup_one_suk(suk_key: str) -> None:
         print(f"⏭  {suk_key}: no spreadsheet ID configured ({env_name}), skipping")
         return
 
-    print(f"\n📍 {suk_key}  (writing to spreadsheet: {spreadsheet_id})")
+    print(f"\n📍 {suk_key}  (spreadsheet ID ends in: ...{spreadsheet_id[-6:]})")
     async with get_session() as session:
         total = 0
         try:
