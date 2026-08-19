@@ -22,7 +22,7 @@ def get_day(d):
 
 def event_to_dict(e: EventBooking) -> dict:
     return {
-        "id": str(e.id), "date": e.date, "day": e.day, "time": e.time,
+        "id": str(e.id), "date": e.date, "time": e.time,
         "name": e.name, "mobile": e.mobile, "venue": e.venue,
         "mapsLink": e.maps_link, "hostedBy": e.hosted_by,
         "bookedAt": e.created_at.strftime("%d/%m/%Y, %I:%M:%S %p") if e.created_at else "",
@@ -80,7 +80,6 @@ async def create(payload: SatsangCreate):
                 venue=payload.venue.strip(), maps_link=payload.maps_link.strip(),
                 date=payload.date, time=payload.time.strip(),
                 hosted_by=payload.hosted_by.strip() or payload.suk_key,
-                day=get_day(payload.date),
             )
             session.add(event)
             await session.flush()
