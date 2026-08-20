@@ -119,7 +119,15 @@ async def delete_photo(file_id: str) -> None:
             headers={"Authorization": f"Bearer {token}"},
             json={"trashed": True},
         )
-        # A 404 here just means the file's already gone — not a real error,
-        # matches the old code's "file may already be gone" tolerance.
-        if resp.status_code not in (200, 404):
+        if resp.status_code == 404:
+            # File's already gone — not a real error, matches the old
+            # code's "file may already be gone" tolerance.
+            print(f"[drive] Trash skipped for {file_id} — file already gone (404).")
+            return
+        if resp.status_code != 200:
+            # Logged here (not just raised) so it shows up in Render logs
+            # even though gallery/main.py's caller wraps this in its own
+            # try/except so a Drive hiccup never blocks the app-side delete.
+            print(f"[drive] FAILED to trash {file_id}: {resp.status_code} {resp.text}")
             resp.raise_for_status()
+        print(f"[drive] Trashed {file_id} successfully.")

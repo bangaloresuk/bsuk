@@ -135,10 +135,11 @@ async def delete(photo_id: str, suk_key: str):
             )
         try:
             await delete_photo(drive_file_id)
-        except Exception:
-            # Matches the old code's tolerance: if the Drive file is
-            # already gone, that's fine — the metadata row is still removed.
-            pass
+        except Exception as e:
+            # Logged so a real failure is visible in Render logs — the
+            # app-side delete still succeeds either way (drive_client.py's
+            # own logging already covers the common "already gone" case).
+            print(f"[gallery] Drive delete failed for {drive_file_id}: {type(e).__name__}: {e}")
         return ok("Photo deleted.")
     except ValueError:
         return err("Invalid photo ID.")
