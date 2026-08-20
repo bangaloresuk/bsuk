@@ -87,7 +87,11 @@ async def upload_photo(suk_key: str, file_bytes: bytes, filename: str) -> dict:
             },
             content=body,
         )
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            # Surface Google's actual error body (usually explains exactly
+            # what's wrong — quota, scope, policy) instead of just the
+            # generic status code, which hides the real reason.
+            raise RuntimeError(f"Drive upload failed ({resp.status_code}): {resp.text}")
         file_id = resp.json()["id"]
 
         # Make it viewable by anyone with the link — same as the old
@@ -97,7 +101,8 @@ async def upload_photo(suk_key: str, file_bytes: bytes, filename: str) -> dict:
             headers={"Authorization": f"Bearer {token}"},
             json={"role": "reader", "type": "anyone"},
         )
-        perm_resp.raise_for_status()
+        if perm_resp.status_code >= 400:
+            raise RuntimeError(f"Drive permission update failed ({perm_resp.status_code}): {perm_resp.text}")
 
     url = f"https://lh3.googleusercontent.com/d/{file_id}"
     return {"file_id": file_id, "url": url}
