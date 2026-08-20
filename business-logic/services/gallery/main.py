@@ -6,7 +6,8 @@ from sqlalchemy import select, delete as sa_delete
 
 from backend.shared.db import get_session, init_db, db_configured
 from backend.shared.db_models import Photo
-from backend.shared.drive_client import upload_photo, delete_photo, drive_configured
+from backend.shared.drive_client import delete_photo
+from backend.shared.gas_client import gas_post
 from backend.shared.auth import validate_suk_key
 from backend.shared.models import PhotoUpload, ok, err
 
@@ -57,37 +58,60 @@ async def upload(payload: PhotoUpload):
     if len(payload.base64.encode()) > 4 * 1024 * 1024:
         return err("Photo too large. Please choose under 3 MB.")
     try:
-        file_bytes = base64.b64decode(payload.base64, validate=True)
+        base64.b64decode(payload.base64, validate=True)  # early validation only
     except Exception:
         return err("Invalid photo data.")
 
-    if not drive_configured():
-        raise HTTPException(status_code=502, detail="Drive isn't configured on the server yet.")
-
     try:
-        # Actual image bytes go to Drive — this is the only remaining
-        # piece that talks to Google at all for the gallery.
-        drive_result = await upload_photo(payload.suk_key, file_bytes, payload.filename)
+        # The actual image bytes go through Apps Script, which uploads as
+        # your real bangaloresuk@gmail.com account — that account has real
+        # Drive storage quota. A service account never can (Google Drive
+        # gives service accounts zero storage of their own on a personal
+        # Gmail account, with no workaround short of a paid Workspace
+        # plan) — see drive_client.py's delete_photo for where the service
+        # account IS still used (deleting an existing file doesn't consume
+        # new storage, so that direction works fine).
+        # This is the ONLY part of the gallery that still talks to Apps
+        # Script — listing, captions, and all other metadata stay on
+        # Postgres exactly as before.
+        gas_result = await gas_post({
+            "action": "uploadPhoto",
+            "sheetName": "Photos",
+            "base64": payload.base64,
+            "filename": payload.filename,
+            "caption": payload.caption.strip(),
+            "uploader": payload.uploader.strip() or "Anonymous",
+        }, payload.suk_key)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Drive upload failed: {e}")
+
+    if not gas_result.get("success"):
+        return err(gas_result.get("message", "Upload failed."))
+
+    # Apps Script returns a view URL like https://lh3.googleusercontent.com/d/{fileId}
+    # — pull the file id back out of it so we can store it in Postgres.
+    view_url = gas_result.get("url", "")
+    drive_file_id = view_url.rsplit("/d/", 1)[-1] if "/d/" in view_url else ""
+    if not drive_file_id:
+        raise HTTPException(status_code=502, detail="Upload succeeded but no file ID was returned.")
 
     try:
         async with get_session() as session:
             photo = Photo(
                 suk_key=payload.suk_key,
-                drive_file_id=drive_result["file_id"],
+                drive_file_id=drive_file_id,
                 caption=payload.caption.strip(),
                 uploader=payload.uploader.strip() or "Anonymous",
             )
             session.add(photo)
             await session.flush()
             new_id = photo.id
-        return {"success": True, "photoId": str(new_id), "url": drive_result["url"], "message": "Photo uploaded!"}
+        return {"success": True, "photoId": str(new_id), "url": view_url, "message": "Photo uploaded!"}
     except Exception as e:
         # Metadata write failed after the Drive upload already succeeded —
         # don't leave an orphaned file with nothing pointing to it.
         try:
-            await delete_photo(drive_result["file_id"])
+            await delete_photo(drive_file_id)
         except Exception:
             pass
         raise HTTPException(status_code=502, detail=str(e))
