@@ -8,6 +8,7 @@ from backend.shared.db import get_session, init_db, db_configured
 from backend.shared.db_models import Photo
 from backend.shared.drive_client import delete_photo
 from backend.shared.gas_client import gas_post
+from backend.shared.timeutils import to_ist_str
 from backend.shared.auth import validate_suk_key
 from backend.shared.models import PhotoUpload, ok, err
 
@@ -22,7 +23,7 @@ def photo_to_dict(p: Photo) -> dict:
         "url": f"https://lh3.googleusercontent.com/d/{p.drive_file_id}",
         "caption": p.caption,
         "uploader": p.uploader,
-        "date": p.created_at.strftime("%d/%m/%Y, %I:%M %p") if p.created_at else "",
+        "date": to_ist_str(p.created_at, "%d/%m/%Y, %I:%M %p"),
     }
 
 

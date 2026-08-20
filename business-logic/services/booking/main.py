@@ -10,6 +10,7 @@ from backend.shared.db_models import Booking
 from backend.shared.auth import validate_suk_key
 from backend.shared.models import BookingCreate, ok, err
 from backend.shared.email_client import send_booking_notification
+from backend.shared.timeutils import to_ist_str
 
 app = FastAPI(title="Booking Service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -40,7 +41,7 @@ def booking_to_dict(b: Booking) -> dict:
         "id": str(b.id), "date": b.date, "day": b.day, "time": b.time,
         "name": b.name, "mobile": b.mobile, "place": b.place,
         "mapsLink": b.maps_link, "prayerTime": get_prayer_time(b.date, b.time),
-        "bookedAt": b.created_at.strftime("%d/%m/%Y, %I:%M:%S %p") if b.created_at else "",
+        "bookedAt": to_ist_str(b.created_at, "%d/%m/%Y, %I:%M:%S %p"),
     }
 
 @app.on_event("startup")

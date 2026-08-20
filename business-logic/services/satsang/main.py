@@ -10,6 +10,7 @@ from backend.shared.db_models import EventBooking
 from backend.shared.auth import validate_suk_key
 from backend.shared.models import SatsangCreate, ok, err
 from backend.shared.email_client import send_booking_notification
+from backend.shared.timeutils import to_ist_str
 
 app = FastAPI(title="Satsang Service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -27,7 +28,7 @@ def event_to_dict(e: EventBooking) -> dict:
         "id": str(e.id), "date": e.date, "time": e.time,
         "name": e.name, "mobile": e.mobile, "venue": e.venue,
         "mapsLink": e.maps_link, "hostedBy": e.hosted_by, "occasion": e.occasion,
-        "bookedAt": e.created_at.strftime("%d/%m/%Y, %I:%M:%S %p") if e.created_at else "",
+        "bookedAt": to_ist_str(e.created_at, "%d/%m/%Y, %I:%M:%S %p"),
     }
 
 @app.on_event("startup")
