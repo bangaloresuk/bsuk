@@ -12,6 +12,7 @@ does per-SUK lookups for GAS_URL/API_KEY.
 """
 import os
 import time
+import json
 import httpx
 from backend.shared.google_auth import get_access_token, google_configured
 
